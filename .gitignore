@@ -1,0 +1,6 @@
+.npm-cache/
+.playwright-daemon/
+.playwright-cli/
+output/
+.codex/workflows/
+gcm-diagnose.log
