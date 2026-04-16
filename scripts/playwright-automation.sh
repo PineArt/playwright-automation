@@ -7,15 +7,7 @@ fail() {
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-workspace_root="$(cd "${script_dir}/../../../.." && pwd)"
-output_root="${workspace_root}/output/playwright"
-daemon_root="${workspace_root}/.playwright-daemon"
-npm_cache="${workspace_root}/.npm-cache"
-
-mkdir -p "${output_root}" "${daemon_root}" "${npm_cache}"
-
-export PLAYWRIGHT_DAEMON_SESSION_DIR="${daemon_root}"
-export npm_config_cache="${npm_cache}"
+pw_auto_workspace_override=""
 
 resolve_npx() {
   if command -v npx >/dev/null 2>&1; then
@@ -99,12 +91,63 @@ timestamp() {
   date +"%Y%m%d-%H%M%S"
 }
 
+extract_wrapper_options() {
+  cleaned_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --workspace)
+        [[ $# -ge 2 ]] || fail "missing value for --workspace."
+        pw_auto_workspace_override="$2"
+        shift 2
+        ;;
+      --workspace=*)
+        pw_auto_workspace_override="${1#--workspace=}"
+        shift
+        ;;
+      *)
+        cleaned_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+}
+
+resolve_workspace_root() {
+  local candidate=""
+  if [[ -n "${pw_auto_workspace_override}" ]]; then
+    candidate="${pw_auto_workspace_override}"
+  elif [[ -n "${PW_AUTO_WORKSPACE:-}" ]]; then
+    candidate="${PW_AUTO_WORKSPACE}"
+  elif [[ -n "${PLAYWRIGHT_AUTOMATION_WORKSPACE:-}" ]]; then
+    candidate="${PLAYWRIGHT_AUTOMATION_WORKSPACE}"
+  else
+    pwd
+    return 0
+  fi
+
+  [[ -d "${candidate}" ]] || fail "workspace path '${candidate}' does not exist."
+  (cd "${candidate}" && pwd)
+}
+
+build_common_env() {
+  workspace_root="$(resolve_workspace_root)"
+  output_root="${workspace_root}/output/playwright"
+  daemon_root="${workspace_root}/.playwright-daemon"
+  npm_cache="${workspace_root}/.npm-cache"
+
+  mkdir -p "${output_root}" "${daemon_root}" "${npm_cache}"
+
+  export PLAYWRIGHT_DAEMON_SESSION_DIR="${daemon_root}"
+  export npm_config_cache="${npm_cache}"
+}
+
 run_cli() {
   "${npx_cmd}" "${cli_prefix[@]}" "$@"
   exit $?
 }
 
 doctor() {
+  build_common_env
   printf '%s\n' "[pw-auto] workspace=${workspace_root}"
   printf '%s\n' "[pw-auto] daemon=${daemon_root}"
   printf '%s\n' "[pw-auto] artifacts=${output_root}"
@@ -124,6 +167,7 @@ open_cmd() {
   mode="$(get_option_value --mode "$@")" || fail "open requires --mode headed or --mode headless."
   [[ "${mode}" == "headed" || "${mode}" == "headless" ]] || fail "invalid mode '${mode}'. Use headed or headless."
 
+  build_common_env
   local cli=(--session "${session}" open "${url}")
   forward_tokens cli --mode --session -- "$@"
 
@@ -140,6 +184,7 @@ open_cmd() {
 }
 
 snapshot_cmd() {
+  build_common_env
   local session
   session="$(require_session "$@")"
   local cli=(--session "${session}" snapshot)
@@ -148,6 +193,7 @@ snapshot_cmd() {
 }
 
 screenshot_cmd() {
+  build_common_env
   local session
   session="$(require_session "$@")"
   local name
@@ -172,6 +218,7 @@ screenshot_cmd() {
 }
 
 trace_start_cmd() {
+  build_common_env
   local session
   session="$(require_session "$@")"
   local cli=(--session "${session}" tracing-start)
@@ -180,6 +227,7 @@ trace_start_cmd() {
 }
 
 trace_stop_cmd() {
+  build_common_env
   local session
   session="$(require_session "$@")"
   local cli=(--session "${session}" tracing-stop)
@@ -188,10 +236,12 @@ trace_stop_cmd() {
 }
 
 sessions_cmd() {
+  build_common_env
   run_cli list
 }
 
 recover_cmd() {
+  build_common_env
   local session
   session="$(require_session "$@")"
 
@@ -215,6 +265,7 @@ recover_cmd() {
 }
 
 cleanup_cmd() {
+  build_common_env
   local session
   session="$(require_session "$@")"
 
@@ -243,6 +294,7 @@ cleanup_cmd() {
 
 run_cmd() {
   [[ $# -ge 1 ]] || fail "run requires a playwright-cli command."
+  build_common_env
   local session=""
   session="$(get_option_value --session "$@" || true)"
   local cli=()
@@ -259,6 +311,9 @@ run_cmd() {
   fi
   exit ${code}
 }
+
+extract_wrapper_options "$@"
+set -- "${cleaned_args[@]}"
 
 [[ $# -ge 1 ]] || fail "missing command. Use doctor, open, snapshot, screenshot, trace-start, trace-stop, sessions, recover, cleanup, or run."
 
@@ -278,3 +333,4 @@ case "${command_name}" in
   run) run_cmd "$@" ;;
   *) fail "unknown command '${command_name}'." ;;
 esac
+

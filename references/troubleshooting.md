@@ -29,6 +29,18 @@ Interpretation:
 - if `doctor` reports daemon directory issues, fix the local daemon path first
 - if `doctor` reports spawn or process permission issues, the environment needs different permissions or a less restricted runtime
 
+## The Skill Was Copied To A Global Skills Directory
+
+That is supported.
+
+The wrappers should still operate on the current working directory, not on the skill installation directory.
+
+If they target the wrong directory:
+
+- run `doctor` and inspect the printed `workspace=...` line
+- pass `--workspace <path>` explicitly
+- or set `PW_AUTO_WORKSPACE` for the current shell session
+
 ## Git Bash Works Interactively But Fails In An Agent Host
 
 If `bash --version` works in your normal Git Bash terminal but the same command fails when launched by an agent host, the problem is usually the host restriction, not the wrapper script.
@@ -64,3 +76,4 @@ Fix:
 ## PowerShell Says Success After A Failing CLI Call
 
 This is a wrapper bug. The PowerShell entrypoint must capture and return the raw `playwright-cli` exit code immediately.
+

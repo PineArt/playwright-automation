@@ -2,3 +2,4 @@ interface:
   display_name: "Playwright Automation"
   short_description: "Robust Playwright automation with explicit mode control"
   default_prompt: "Use $playwright-automation to automate a browser workflow with explicit headed or headless mode."
+

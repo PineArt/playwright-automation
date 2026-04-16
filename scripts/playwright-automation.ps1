@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $script:PwAutoScriptDir = $PSScriptRoot
+$script:PwAutoWorkspaceOverride = ""
 
 function Fail([string]$Message, [int]$Code = 1) {
     Write-Error "[pw-auto] $Message"
@@ -12,7 +13,22 @@ function Fail([string]$Message, [int]$Code = 1) {
 }
 
 function Resolve-WorkspaceRoot {
-    return (Resolve-Path (Join-Path $script:PwAutoScriptDir "..\\..\\..\\..")).Path
+    $candidate = ""
+    if ($script:PwAutoWorkspaceOverride) {
+        $candidate = $script:PwAutoWorkspaceOverride
+    } elseif ($env:PW_AUTO_WORKSPACE) {
+        $candidate = $env:PW_AUTO_WORKSPACE
+    } elseif ($env:PLAYWRIGHT_AUTOMATION_WORKSPACE) {
+        $candidate = $env:PLAYWRIGHT_AUTOMATION_WORKSPACE
+    } else {
+        return (Get-Location).Path
+    }
+
+    try {
+        return (Resolve-Path -LiteralPath $candidate).Path
+    } catch {
+        Fail "workspace path '$candidate' does not exist."
+    }
 }
 
 function Resolve-Npx {
@@ -134,6 +150,31 @@ function Add-ForwardTokens {
 
 function New-Timestamp {
     return (Get-Date).ToString("yyyyMMdd-HHmmss")
+}
+
+function Extract-WrapperOptions {
+    param(
+        [string[]]$Tokens
+    )
+
+    $clean = New-Object System.Collections.Generic.List[string]
+    for ($i = 0; $i -lt $Tokens.Length; $i++) {
+        $token = $Tokens[$i]
+        if ($token -eq "--workspace") {
+            if ($i + 1 -ge $Tokens.Length) {
+                Fail "missing value for --workspace."
+            }
+            $script:PwAutoWorkspaceOverride = $Tokens[$i + 1]
+            $i += 1
+            continue
+        }
+        if ($token.StartsWith("--workspace=")) {
+            $script:PwAutoWorkspaceOverride = $token.Substring("--workspace=".Length)
+            continue
+        }
+        $clean.Add($token)
+    }
+    return ,$clean.ToArray()
 }
 
 function Invoke-Doctor {
@@ -358,6 +399,8 @@ function Invoke-Run {
     exit $exitCode
 }
 
+$Arguments = Extract-WrapperOptions -Tokens $Arguments
+
 if (-not $Arguments -or $Arguments.Length -eq 0) {
     Fail "missing command. Use doctor, open, snapshot, screenshot, trace-start, trace-stop, sessions, recover, cleanup, or run."
 }
@@ -381,3 +424,4 @@ switch ($command) {
     "run" { Invoke-Run -Tokens $restArgs }
     default { Fail "unknown command '$command'." }
 }
+

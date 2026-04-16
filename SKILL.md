@@ -1,6 +1,6 @@
 ---
 name: playwright-automation
-description: Robust Playwright CLI browser automation for repo-local use with explicit headed or headless mode, deterministic session handling, artifact conventions, and recovery guardrails. Use when Codex or Claude needs to automate a real browser from the terminal for navigation, form filling, screenshots, snapshots, tracing, UI debugging, or data extraction without defaulting to Playwright test specs.
+description: Robust Playwright CLI browser automation with explicit headed or headless mode, deterministic session handling, artifact conventions, and recovery guardrails. Use when Codex or Claude needs to automate a real browser from the terminal for navigation, form filling, screenshots, snapshots, tracing, UI debugging, or data extraction without defaulting to Playwright test specs.
 ---
 
 # Playwright Automation
@@ -10,7 +10,7 @@ Treat `headed` and `headless` as peer modes. Do not open a browser without an ex
 
 ## Core Rules
 
-- Always invoke the repo-local wrapper scripts, not the raw CLI, unless debugging the wrapper itself.
+- Always invoke the wrapper scripts, not the raw CLI, unless debugging the wrapper itself.
 - Always pass `--mode headed` or `--mode headless` to `open`.
 - Keep one session per agent instance. Reuse that named session instead of starting extra browser instances.
 - Snapshot before using refs like `e12`.
@@ -19,12 +19,24 @@ Treat `headed` and `headless` as peer modes. Do not open a browser without an ex
 - Prefer `doctor` before blaming the page or the wrapper.
 - Use `recover` conservatively. Do not kill sessions unless you explicitly choose a destructive flag.
 
-## Repo-Local Entrypoints
+## Entrypoints
+
+This repository is the skill root.
+If someone clones this repository, they should be able to copy the repository directory directly into a Codex or Claude skills directory and use it as-is.
+
+Examples:
+
+- clone repo -> copy repo folder to `$CODEX_HOME/skills/playwright-automation`
+- clone repo -> copy repo folder to Claude's skills directory under `playwright-automation`
 
 Use the script that matches the current shell:
 
-- PowerShell: `.codex/skills/playwright-automation/scripts/playwright-automation.ps1`
-- Git Bash: `.codex/skills/playwright-automation/scripts/playwright-automation.sh`
+- PowerShell: `scripts/playwright-automation.ps1`
+- Git Bash: `scripts/playwright-automation.sh`
+
+If the skill is installed somewhere else, use that installed path instead.
+The wrappers use the current working directory as the workspace by default.
+Override the workspace explicitly with `--workspace <path>` or `PW_AUTO_WORKSPACE`.
 
 Logical command pattern:
 
@@ -35,6 +47,7 @@ playwright-automation <command> [args] [options]
 The wrappers normalize:
 
 - explicit mode enforcement for `open`
+- current-workspace defaults instead of install-location defaults
 - session and artifact environment defaults
 - deterministic error prefixes
 - safer recovery and cleanup entrypoints
