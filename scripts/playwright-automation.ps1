@@ -195,13 +195,15 @@ function Invoke-Doctor {
 
     $listArgs = Build-CliPrefix
     $listArgs += @("list")
-    & (Resolve-Npx) @listArgs
+    $listOutput = & (Resolve-Npx) @listArgs 2>&1 | Out-String
     $listExit = $LASTEXITCODE
+    Write-Output $listOutput.TrimEnd()
     if ($listExit -ne 0) {
         exit $listExit
     }
 
-    Write-Output "[pw-auto] doctor completed. If browser open still fails with EPERM or spawn errors, the runtime is restricting browser startup."
+    Write-Output "[pw-auto] note: 'playwright-cli list' reports browser sessions, not installed browser binaries."
+    Write-Output "[pw-auto] doctor completed."
     exit 0
 }
 
@@ -424,4 +426,3 @@ switch ($command) {
     "run" { Invoke-Run -Tokens $restArgs }
     default { Fail "unknown command '$command'." }
 }
-

@@ -152,8 +152,15 @@ doctor() {
   printf '%s\n' "[pw-auto] daemon=${daemon_root}"
   printf '%s\n' "[pw-auto] artifacts=${output_root}"
   "${npx_cmd}" "${cli_prefix[@]}" --version || exit $?
-  "${npx_cmd}" "${cli_prefix[@]}" list || exit $?
-  printf '%s\n' "[pw-auto] doctor completed. If browser open still fails with EPERM or spawn errors, the runtime is restricting browser startup."
+  local list_output
+  list_output="$("${npx_cmd}" "${cli_prefix[@]}" list 2>&1)"
+  local list_code=$?
+  printf '%s\n' "${list_output}"
+  if [[ ${list_code} -ne 0 ]]; then
+    exit ${list_code}
+  fi
+  printf '%s\n' "[pw-auto] note: 'playwright-cli list' reports browser sessions, not installed browser binaries."
+  printf '%s\n' "[pw-auto] doctor completed."
 }
 
 open_cmd() {
@@ -333,4 +340,3 @@ case "${command_name}" in
   run) run_cmd "$@" ;;
   *) fail "unknown command '${command_name}'." ;;
 esac
-

@@ -6,6 +6,22 @@ Use this file when the wrapper fails before a browser action completes.
 
 Install Node.js and npm first. The wrapper depends on `npx`.
 
+## `doctor` Shows `(no browsers)`
+
+`doctor` currently prints the output of `playwright-cli list`.
+
+That command lists browser sessions. In this context, `(no browsers)` means
+there are no active Playwright CLI browser sessions in the current workspace.
+It does not mean Chrome, Firefox, or WebKit are missing from the machine.
+
+This is normal before the first successful `open`, and it can also appear
+after sessions have been closed or cleaned up.
+
+If `open` still fails after this, inspect the concrete command error. Browser
+startup failures such as `EPERM`, process spawning restrictions, or runtime
+installation issues need to be diagnosed from the actual failure path, not
+from the session list alone.
+
 ## `open` Fails Because Mode Was Not Provided
 
 This is expected. The skill requires explicit mode on every `open`.
@@ -76,4 +92,3 @@ Fix:
 ## PowerShell Says Success After A Failing CLI Call
 
 This is a wrapper bug. The PowerShell entrypoint must capture and return the raw `playwright-cli` exit code immediately.
-
