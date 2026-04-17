@@ -45,6 +45,12 @@ Interpretation:
 - if `doctor` reports daemon directory issues, fix the local daemon path first
 - if `doctor` reports spawn or process permission issues, the environment needs different permissions or a less restricted runtime
 
+If the host supports persisted approval rules and you expect to repeat the same wrapper command:
+
+- prefer approving the concrete wrapper command prefix for future runs
+- do not approve a broad shell prefix just to suppress repeated prompts
+- if browser launch uses a separate helper binary such as `chrome.exe`, that helper may need its own narrowly scoped persisted approval
+
 ## The Skill Was Copied To A Global Skills Directory
 
 That is supported.
@@ -71,6 +77,11 @@ In that case:
 - keep Git Bash support in the published skill
 - document PowerShell as the safer fallback for restricted Windows agent hosts
 - validate the Git Bash wrapper from a normal Git Bash shell before blaming the skill
+
+If repeated approvals are the main friction:
+
+- prefer PowerShell when the host already has a persisted approval for the PowerShell wrapper path
+- keep approvals path-specific and task-specific so the same rule can be reused safely
 
 ## Session Exists But Commands Keep Failing
 

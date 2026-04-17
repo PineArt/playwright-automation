@@ -18,6 +18,8 @@ Treat `headed` and `headless` as peer modes. Do not open a browser without an ex
 - Store artifacts under `output/playwright/<session>/`.
 - Prefer `doctor` before blaming the page or the wrapper.
 - Use `recover` conservatively. Do not kill sessions unless you explicitly choose a destructive flag.
+- In hosts that support persisted approval rules, prefer a narrowly scoped persistent approval for repeated wrapper commands instead of re-requesting one-off approval every time.
+- Keep persisted approval scope tight. Approve the concrete wrapper or browser helper prefix you need, not a broad shell prefix that would allow unrelated commands.
 
 ## Entrypoints
 
@@ -95,6 +97,7 @@ Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `
 5. Snapshot again after state changes.
 6. Capture artifacts when the step matters.
 7. If a command fails, inspect the error prefix and use `recover --session <name>` before escalating.
+8. If the same permission prompt keeps recurring, prefer a persisted approval for that specific wrapper command family before continuing the loop.
 
 ## Guardrails
 
@@ -104,6 +107,7 @@ Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `
 - Do not treat `doctor` as an installer; read its result first.
 - Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough.
 - Do not assume the current environment can spawn browsers. In restricted sandboxes, `doctor` may report permission failures that require escalation or a different environment.
+- Do not persist an approval that is broader than the repeated action requires. Wrapper-specific approval is preferred over approving a general shell interpreter.
 
 ## References
 
@@ -113,4 +117,3 @@ Open only what you need:
 - `references/recovery.md` for session lifecycle and recovery semantics
 - `references/shell-syntax.md` for PowerShell and Git Bash syntax
 - `references/troubleshooting.md` for permission, daemon, browser, and wrapper failures
-
