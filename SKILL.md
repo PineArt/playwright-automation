@@ -76,7 +76,7 @@ For command syntax in each shell, read `references/shell-syntax.md`.
 Use these wrapper commands:
 
 - `doctor`
-- `open <url> --session <name> --mode <headed|headless>`
+- `open <url> --session <name> --mode <headed|headless> [--maximize]`
 - `snapshot --session <name>`
 - `screenshot --session <name> [--name <label>] [--full-page] [target]`
 - `trace-start --session <name>`
@@ -85,8 +85,10 @@ Use these wrapper commands:
 - `recover --session <name>`
 - `cleanup --session <name>`
 - `run ...` for passthrough to `playwright-cli` after the wrapper has set environment defaults
+- `cli ...` and `raw ...` as explicit passthrough aliases for `run ...`
 
 Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `network` when there is no dedicated wrapper alias.
+Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
 
 ## Workflow
 

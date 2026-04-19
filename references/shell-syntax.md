@@ -17,9 +17,11 @@ Recommended direct usage:
 ```powershell
 & .\scripts\playwright-automation.ps1 doctor
 & .\scripts\playwright-automation.ps1 open https://example.com --session gallery-a1-headed --mode headed
+& .\scripts\playwright-automation.ps1 open https://example.com --session gallery-a1-headed --mode headed --maximize
 & .\scripts\playwright-automation.ps1 snapshot --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 screenshot --session gallery-a1-headed --name home
 & .\scripts\playwright-automation.ps1 run click e3 --session gallery-a1-headed
+& .\scripts\playwright-automation.ps1 cli click e3 --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 recover --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cleanup --session gallery-a1-headed
 ```
@@ -37,9 +39,11 @@ Recommended direct usage:
 ```bash
 bash ./scripts/playwright-automation.sh doctor
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed
+bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed --maximize
 bash ./scripts/playwright-automation.sh snapshot --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh screenshot --session gallery-a1-headed --name home
 bash ./scripts/playwright-automation.sh run click e3 --session gallery-a1-headed
+bash ./scripts/playwright-automation.sh cli click e3 --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh recover --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cleanup --session gallery-a1-headed
 ```
@@ -57,4 +61,3 @@ Both shells should preserve:
 - the same exit code
 - the same artifact path convention
 - the same `[pw-auto]` error prefix
-

@@ -42,6 +42,18 @@ get_option_value() {
   return 1
 }
 
+has_flag() {
+  local name="$1"
+  shift
+  local token
+  for token in "$@"; do
+    if [[ "${token}" == "${name}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 require_session() {
   local session
   session="$(get_option_value --session "$@")" || fail "missing required --session <name>."
@@ -51,21 +63,39 @@ require_session() {
 forward_tokens() {
   local -n out_ref=$1
   shift
-  local skip_names=()
+  local skip_value_names=()
+  local skip_flags=()
+  local mode="values"
   while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "--" ]]; then
-      shift
-      break
-    fi
-    skip_names+=("$1")
-    shift
+    case "$1" in
+      --)
+        shift
+        break
+        ;;
+      --values)
+        mode="values"
+        shift
+        ;;
+      --flags)
+        mode="flags"
+        shift
+        ;;
+      *)
+        if [[ "${mode}" == "values" ]]; then
+          skip_value_names+=("$1")
+        else
+          skip_flags+=("$1")
+        fi
+        shift
+        ;;
+    esac
   done
 
   while [[ $# -gt 0 ]]; do
     local token="$1"
     local skip=0
     local name
-    for name in "${skip_names[@]}"; do
+    for name in "${skip_value_names[@]}"; do
       if [[ "${token}" == "${name}" ]]; then
         shift
         if [[ $# -gt 0 ]]; then
@@ -80,6 +110,15 @@ forward_tokens() {
         break
       fi
     done
+    if [[ ${skip} -eq 0 ]]; then
+      for name in "${skip_flags[@]}"; do
+        if [[ "${token}" == "${name}" ]]; then
+          shift
+          skip=1
+          break
+        fi
+      done
+    fi
     if [[ ${skip} -eq 0 ]]; then
       out_ref+=("${token}")
       shift
@@ -141,6 +180,111 @@ build_common_env() {
   export npm_config_cache="${npm_cache}"
 }
 
+resolve_config_path() {
+  local root="$1"
+  local config_value="$2"
+  if [[ "${config_value}" =~ ^[A-Za-z]:[\\/].* ]] || [[ "${config_value}" == /* ]]; then
+    printf '%s\n' "${config_value}"
+  else
+    printf '%s\n' "${root}/${config_value}"
+  fi
+}
+
+resolve_open_base_config_path() {
+  local config_value
+  config_value="$(get_option_value --config "$@" || true)"
+  if [[ -n "${config_value}" ]]; then
+    resolve_config_path "${workspace_root}" "${config_value}"
+    return 0
+  fi
+
+  local default_config="${workspace_root}/.playwright/cli.config.json"
+  if [[ -f "${default_config}" ]]; then
+    printf '%s\n' "${default_config}"
+  fi
+}
+
+create_maximized_open_config() {
+  local session="$1"
+  shift
+
+  local base_config=""
+  base_config="$(resolve_open_base_config_path "$@" || true)"
+  if [[ -n "${base_config}" && ! -f "${base_config}" ]]; then
+    fail "cannot apply --maximize because config '${base_config}' does not exist."
+  fi
+
+  local config_dir="${output_root}/_pwauto"
+  mkdir -p "${config_dir}"
+  local safe_session
+  safe_session="$(printf '%s' "${session}" | tr -c 'A-Za-z0-9._-' '_')"
+  local temp_config="${config_dir}/open-${safe_session}-maximize-$(timestamp).json"
+  local browser_name=""
+  browser_name="$(get_option_value --browser "$@" || true)"
+
+  BASE_CONFIG="${base_config}" TARGET_CONFIG="${temp_config}" BROWSER_NAME="${browser_name}" node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const baseConfig = process.env.BASE_CONFIG || '';
+const targetConfig = process.env.TARGET_CONFIG;
+let config = {};
+
+if (baseConfig) {
+  try {
+    const raw = fs.readFileSync(baseConfig, 'utf8').trim();
+    if (raw)
+      config = JSON.parse(raw);
+  } catch (error) {
+    console.error(`[pw-auto] cannot apply --maximize because config '${baseConfig}' is not valid JSON.`);
+    process.exit(1);
+  }
+}
+
+if (!config || typeof config !== 'object' || Array.isArray(config))
+  config = {};
+
+if (!config.browser || typeof config.browser !== 'object' || Array.isArray(config.browser))
+  config.browser = {};
+
+const browserName = process.env.BROWSER_NAME || config.browser.browserName || '';
+if (browserName === 'firefox' || browserName === 'webkit') {
+  console.error('[pw-auto] --maximize is supported only for Chromium-family browsers.');
+  process.exit(1);
+}
+
+if (!config.browser.launchOptions || typeof config.browser.launchOptions !== 'object' || Array.isArray(config.browser.launchOptions))
+  config.browser.launchOptions = {};
+if (browserName) {
+  if (browserName === 'chrome' || browserName.startsWith('chrome-')) {
+    config.browser.browserName = 'chromium';
+    config.browser.launchOptions.channel = browserName;
+  } else if (browserName === 'msedge' || browserName.startsWith('msedge-')) {
+    config.browser.browserName = 'chromium';
+    config.browser.launchOptions.channel = browserName;
+  } else {
+    config.browser.browserName = browserName;
+  }
+}
+
+const launchArgs = Array.isArray(config.browser.launchOptions.args) ? config.browser.launchOptions.args.map(String) : [];
+if (!launchArgs.includes('--start-maximized'))
+  launchArgs.push('--start-maximized');
+config.browser.launchOptions.args = launchArgs;
+
+if (!config.browser.contextOptions || typeof config.browser.contextOptions !== 'object' || Array.isArray(config.browser.contextOptions))
+  config.browser.contextOptions = {};
+config.browser.contextOptions.viewport = null;
+
+fs.mkdirSync(path.dirname(targetConfig), { recursive: true });
+fs.writeFileSync(targetConfig, `${JSON.stringify(config, null, 2)}\n`);
+NODE
+  local node_code=$?
+  [[ ${node_code} -eq 0 ]] || exit ${node_code}
+
+  printf '%s\n' "${temp_config}"
+}
+
 run_cli() {
   "${npx_cmd}" "${cli_prefix[@]}" "$@"
   exit $?
@@ -173,13 +317,34 @@ open_cmd() {
   local mode
   mode="$(get_option_value --mode "$@")" || fail "open requires --mode headed or --mode headless."
   [[ "${mode}" == "headed" || "${mode}" == "headless" ]] || fail "invalid mode '${mode}'. Use headed or headless."
+  local maximize=0
+  if has_flag --maximize "$@"; then
+    maximize=1
+  fi
+  [[ ${maximize} -eq 0 || "${mode}" == "headed" ]] || fail "--maximize requires --mode headed."
 
   build_common_env
   local cli=(--session "${session}" open "${url}")
-  forward_tokens cli --mode --session -- "$@"
+  local forward_args=(--values --mode --session)
+  if [[ ${maximize} -eq 1 ]]; then
+    forward_args+=(--flags --maximize)
+    if get_option_value --config "$@" >/dev/null 2>&1; then
+      forward_args+=(--values --config)
+    fi
+    if get_option_value --browser "$@" >/dev/null 2>&1; then
+      forward_args+=(--values --browser)
+    fi
+  fi
+  forward_tokens cli "${forward_args[@]}" -- "$@"
 
   if [[ "${mode}" == "headed" ]]; then
     cli+=(--headed)
+  fi
+  if [[ ${maximize} -eq 1 ]]; then
+    unset PLAYWRIGHT_MCP_VIEWPORT_SIZE
+    local temp_config
+    temp_config="$(create_maximized_open_config "${session}" "$@")"
+    cli+=(--config "${temp_config}")
   fi
 
   "${npx_cmd}" "${cli_prefix[@]}" "${cli[@]}"
@@ -195,7 +360,7 @@ snapshot_cmd() {
   local session
   session="$(require_session "$@")"
   local cli=(--session "${session}" snapshot)
-  forward_tokens cli --session -- "$@"
+  forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
 }
 
@@ -214,7 +379,7 @@ screenshot_cmd() {
   local filename="${session_dir}/${name}-$(timestamp).png"
 
   local cli=(--session "${session}" screenshot --filename "${filename}")
-  forward_tokens cli --session --name -- "$@"
+  forward_tokens cli --values --session --name -- "$@"
 
   "${npx_cmd}" "${cli_prefix[@]}" "${cli[@]}"
   local code=$?
@@ -229,7 +394,7 @@ trace_start_cmd() {
   local session
   session="$(require_session "$@")"
   local cli=(--session "${session}" tracing-start)
-  forward_tokens cli --session -- "$@"
+  forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
 }
 
@@ -238,7 +403,7 @@ trace_stop_cmd() {
   local session
   session="$(require_session "$@")"
   local cli=(--session "${session}" tracing-stop)
-  forward_tokens cli --session -- "$@"
+  forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
 }
 
@@ -308,7 +473,7 @@ run_cmd() {
   if [[ -n "${session}" ]]; then
     cli+=(--session "${session}")
   fi
-  forward_tokens cli --session -- "$@"
+  forward_tokens cli --values --session -- "$@"
   "${npx_cmd}" "${cli_prefix[@]}" "${cli[@]}"
   local code=$?
   if [[ ${code} -ne 0 ]]; then
@@ -322,7 +487,7 @@ run_cmd() {
 extract_wrapper_options "$@"
 set -- "${cleaned_args[@]}"
 
-[[ $# -ge 1 ]] || fail "missing command. Use doctor, open, snapshot, screenshot, trace-start, trace-stop, sessions, recover, cleanup, or run."
+[[ $# -ge 1 ]] || fail "missing command. Use doctor, open, snapshot, screenshot, trace-start, trace-stop, sessions, recover, cleanup, run, cli, or raw."
 
 command_name="$1"
 shift
@@ -338,5 +503,7 @@ case "${command_name}" in
   recover) recover_cmd "$@" ;;
   cleanup) cleanup_cmd "$@" ;;
   run) run_cmd "$@" ;;
+  cli) run_cmd "$@" ;;
+  raw) run_cmd "$@" ;;
   *) fail "unknown command '${command_name}'." ;;
 esac

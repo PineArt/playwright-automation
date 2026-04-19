@@ -31,6 +31,24 @@ Fix the command by adding one of:
 - `--mode headed`
 - `--mode headless`
 
+## `open --maximize` Does Not Maximize The Window
+
+The wrapper-level `--maximize` flag is implemented by generating a temporary
+Playwright CLI config with:
+
+- `browser.launchOptions.args += ["--start-maximized"]`
+- `browser.contextOptions.viewport = null`
+
+This is intended for Chromium-family browsers. It is not supported for
+Firefox or WebKit.
+
+Checks:
+
+- make sure `open` also includes `--mode headed`
+- avoid pairing `--maximize` with `--browser firefox` or `--browser webkit`
+- inspect `output/playwright/_pwauto/` to confirm the temporary config was generated
+- if you already set `--config`, ensure that file contains valid JSON so the wrapper can merge into it
+
 ## `open` Fails With `EPERM` On Windows
 
 There are two common causes:
