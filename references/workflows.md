@@ -46,9 +46,21 @@ This keeps artifact paths and recovery commands obvious.
 
 1. `open` with explicit mode and session.
 2. `snapshot`.
-3. `run fill ...` or `run click ...`.
-4. `snapshot`.
-5. `screenshot --name submitted`.
+3. Prefer stable selectors first and latest snapshot refs second.
+4. Use `target-first fill --text ... --target "<stable selector>" --target e12`.
+5. For submit-oriented flows, prefer `run fill ... --submit` on the final editable field or `run press Enter`.
+6. If a button is still needed, use `target-first click --target "<stable selector>" --target e21 --settle-ms 1500`.
+7. `snapshot`.
+8. `screenshot --name submitted`.
+
+Example:
+
+```text
+target-first fill --session login-headed --text my-user --target "#username" --target e12
+playwright-automation run fill "#password" my-pass --submit --session login-headed
+playwright-automation run eval "() => new Promise((resolve) => setTimeout(resolve, 2000))" --session login-headed
+playwright-automation snapshot --session login-headed
+```
 
 ## UI Debugging
 
@@ -57,9 +69,10 @@ When a flow is visually wrong:
 1. Prefer `--mode headed`.
 2. Use `snapshot`.
 3. Use `screenshot --name before-fix`.
-4. Use `run console` or `run network`.
-5. Use `trace-start` before suspicious actions.
-6. Use `trace-stop` after reproducing.
+4. If refs are flaky, retry the step with selector-first ordering through `target-first`.
+5. Use `run console` or `run network`.
+6. Use `trace-start` before suspicious actions.
+7. Use `trace-stop` after reproducing.
 
 ## Data Extraction
 
@@ -70,4 +83,3 @@ Use `run eval ...` only when the CLI does not already expose the needed behavior
 
 This skill does not support multiple sessions for the same agent.
 If an agent needs a clean slate, close or clean up the old session first.
-

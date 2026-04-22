@@ -64,7 +64,7 @@ Core loop:
 playwright-automation doctor
 playwright-automation open https://example.com --session gallery-a1-headed --mode headed
 playwright-automation snapshot --session gallery-a1-headed
-playwright-automation click e3 --session gallery-a1-headed
+target-first click --session gallery-a1-headed --target "#primary-action" --target e3 --settle-ms 1500
 playwright-automation snapshot --session gallery-a1-headed
 playwright-automation screenshot --session gallery-a1-headed --name after-click
 ```
@@ -81,6 +81,7 @@ Use these wrapper commands:
 - `screenshot --session <name> [--name <label>] [--full-page] [target]`
 - `trace-start --session <name>`
 - `trace-stop --session <name>`
+- `scripts/target-first.ps1` or `scripts/target-first.sh` for selector-first, ref-fallback interactions
 - `sessions`
 - `recover --session <name>`
 - `cleanup --session <name>`
@@ -89,17 +90,19 @@ Use these wrapper commands:
 
 Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `network` when there is no dedicated wrapper alias.
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
+Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last.
 
 ## Workflow
 
 1. Run `doctor`.
 2. Open with explicit mode and named session.
 3. Snapshot to get current refs.
-4. Interact.
-5. Snapshot again after state changes.
-6. Capture artifacts when the step matters.
-7. If a command fails, inspect the error prefix and use `recover --session <name>` before escalating.
-8. If the same permission prompt keeps recurring, prefer a persisted approval for that specific wrapper command family before continuing the loop.
+4. Interact. Prefer stable selectors first and refs from the latest snapshot second.
+5. For submit-oriented flows, prefer `fill --submit`, `press Enter`, or `target-first ... --settle-ms`.
+6. Snapshot again after state changes.
+7. Capture artifacts when the step matters.
+8. If a command fails, inspect the error prefix and use `recover --session <name>` before escalating.
+9. If the same permission prompt keeps recurring, prefer a persisted approval for that specific wrapper command family before continuing the loop.
 
 ## Guardrails
 
@@ -108,6 +111,7 @@ Use `--maximize` only with `--mode headed`; it injects a temporary config that s
 - Do not use `recover` without `--session`.
 - Do not treat `doctor` as an installer; read its result first.
 - Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough.
+- Do not default to snapshot refs when you already have a stable unique selector; keep refs as the fallback.
 - Do not assume the current environment can spawn browsers. In restricted sandboxes, `doctor` may report permission failures that require escalation or a different environment.
 - Do not persist an approval that is broader than the repeated action requires. Wrapper-specific approval is preferred over approving a general shell interpreter.
 

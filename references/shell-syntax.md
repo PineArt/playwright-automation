@@ -10,6 +10,7 @@ Set a convenient wrapper variable:
 
 ```powershell
 $pwauto = ".\scripts\playwright-automation.ps1"
+$pwtarget = ".\scripts\target-first.ps1"
 ```
 
 Recommended direct usage:
@@ -22,6 +23,9 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 screenshot --session gallery-a1-headed --name home
 & .\scripts\playwright-automation.ps1 run click e3 --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cli click e3 --session gallery-a1-headed
+& .\scripts\target-first.ps1 fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
+& .\scripts\playwright-automation.ps1 run fill "#password" "secret" --submit --session gallery-a1-headed
+& .\scripts\target-first.ps1 click --session gallery-a1-headed --target "#login" --target e21 --settle-ms 2000
 & .\scripts\playwright-automation.ps1 recover --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cleanup --session gallery-a1-headed
 ```
@@ -38,12 +42,16 @@ Recommended direct usage:
 
 ```bash
 bash ./scripts/playwright-automation.sh doctor
+bash ./scripts/target-first.sh help
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed --maximize
 bash ./scripts/playwright-automation.sh snapshot --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh screenshot --session gallery-a1-headed --name home
 bash ./scripts/playwright-automation.sh run click e3 --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cli click e3 --session gallery-a1-headed
+bash ./scripts/target-first.sh fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
+bash ./scripts/playwright-automation.sh run fill "#password" "secret" --submit --session gallery-a1-headed
+bash ./scripts/target-first.sh click --session gallery-a1-headed --target "#login" --target e21 --settle-ms 2000
 bash ./scripts/playwright-automation.sh recover --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cleanup --session gallery-a1-headed
 ```
