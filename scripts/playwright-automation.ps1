@@ -29,6 +29,7 @@ function Write-Help {
                 "[pw-auto]   screenshot   save a screenshot under output/playwright/<session>/",
                 "[pw-auto]   trace-start  start Playwright tracing for a session",
                 "[pw-auto]   trace-stop   stop Playwright tracing for a session",
+                "[pw-auto]   cookie       set, list, or clear cookies without echoing values",
                 "[pw-auto]   sessions     list active Playwright CLI sessions",
                 "[pw-auto]   recover      attempt non-destructive recovery for one session",
                 "[pw-auto]   cleanup      close one session and optionally delete its data",
@@ -99,6 +100,25 @@ function Write-Help {
                 "[pw-auto] description: stop Playwright tracing for a session",
                 "[pw-auto] required:",
                 "[pw-auto]   --session <name>"
+            )
+        }
+        "cookie" {
+            $lines = @(
+                "[pw-auto] usage: playwright-automation [--workspace <path>] cookie <set|list|clear> --session <name> --url <url> [options]",
+                "[pw-auto] description: safely set, list, or clear cookies in an existing Playwright session",
+                "[pw-auto] commands:",
+                "[pw-auto]   cookie set --session <name> --url <url> --name <cookie_name> --value-env <ENV_NAME> [--path /] [--domain <domain>] [--same-site Strict|Lax|None] [--secure] [--http-only]",
+                "[pw-auto]   cookie set --session <name> --url <url> --name <cookie_name> --value-file <path> [same options]",
+                "[pw-auto]   cookie clear --session <name> --url <url> --name <cookie_name> [--path /] [--domain <domain>]",
+                "[pw-auto]   cookie list --session <name> --url <url> [--redact|--show-values]",
+                "[pw-auto] required:",
+                "[pw-auto]   --session <name>",
+                "[pw-auto]   --url <url>",
+                "[pw-auto] notes:",
+                "[pw-auto]   values are redacted by default and never printed by set or clear",
+                "[pw-auto]   set reads values from --value-env or --value-file; raw --value is intentionally unsupported",
+                "[pw-auto]   list redacts values unless --show-values is explicitly provided",
+                "[pw-auto]   --url is always required; the wrapper does not guess origin or domain"
             )
         }
         "sessions" {
@@ -619,6 +639,28 @@ function Invoke-TraceStop {
     Invoke-PlaywrightCli -CliArguments $cli
 }
 
+function Invoke-Cookie {
+    param(
+        [string[]]$Tokens
+    )
+    if ($Tokens.Length -lt 1) {
+        Fail "cookie requires set, list, or clear."
+    }
+    $paths = Build-CommonEnv
+    $nodeCommand = ""
+    if (Get-Command node.exe -ErrorAction SilentlyContinue) {
+        $nodeCommand = "node.exe"
+    } elseif (Get-Command node -ErrorAction SilentlyContinue) {
+        $nodeCommand = "node"
+    } else {
+        Fail "node was not found on PATH."
+    }
+    $helperPath = Join-Path $script:PwAutoScriptDir "cookie-helper.js"
+    & $nodeCommand $helperPath "--output-root" $paths.OutputRoot "--workspace-root" $paths.WorkspaceRoot "--daemon-root" $paths.DaemonRoot @Tokens
+    $exitCode = $LASTEXITCODE
+    exit $exitCode
+}
+
 function Invoke-Sessions {
     Build-CommonEnv | Out-Null
     $cli = Build-CliPrefix
@@ -739,6 +781,7 @@ switch ($command) {
     "screenshot" { Invoke-Screenshot -Tokens $restArgs }
     "trace-start" { Invoke-TraceStart -Tokens $restArgs }
     "trace-stop" { Invoke-TraceStop -Tokens $restArgs }
+    "cookie" { Invoke-Cookie -Tokens $restArgs }
     "sessions" { Invoke-Sessions }
     "recover" { Invoke-Recover -Tokens $restArgs }
     "cleanup" { Invoke-Cleanup -Tokens $restArgs }

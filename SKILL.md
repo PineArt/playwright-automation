@@ -82,6 +82,10 @@ Use these wrapper commands:
 - `trace-start --session <name>`
 - `trace-stop --session <name>`
 - `scripts/target-first.ps1` or `scripts/target-first.sh` for selector-first, ref-fallback interactions
+- `cookie set --session <name> --url <url> --name <cookie_name> --value-env <ENV_NAME> [--path /] [--domain <domain>] [--same-site Strict|Lax|None] [--secure] [--http-only]`
+- `cookie set --session <name> --url <url> --name <cookie_name> --value-file <path> [same options]`
+- `cookie list --session <name> --url <url> [--redact|--show-values]`
+- `cookie clear --session <name> --url <url> --name <cookie_name> [--path /] [--domain <domain>]`
 - `sessions`
 - `recover --session <name>`
 - `cleanup --session <name>`
@@ -91,6 +95,7 @@ Use these wrapper commands:
 Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `network` when there is no dedicated wrapper alias.
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
 Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last.
+Use `cookie` for login-state injection during local UI verification. Always provide `--session` and `--url`; the wrapper does not infer origin or domain. Prefer `--value-env` or `--value-file` for secrets. Cookie values are redacted by default and are only shown by `cookie list` when `--show-values` is explicitly provided.
 
 ## Workflow
 
@@ -112,6 +117,7 @@ Use `target-first` when you want a lightweight ordered fallback such as stable s
 - Do not treat `doctor` as an installer; read its result first.
 - Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough.
 - Do not default to snapshot refs when you already have a stable unique selector; keep refs as the fallback.
+- Do not use `run eval` with `document.cookie` for login-state injection. Use the `cookie` command so HttpOnly cookies work and values are not echoed in command output.
 - Do not assume the current environment can spawn browsers. In restricted sandboxes, `doctor` may report permission failures that require escalation or a different environment.
 - Do not persist an approval that is broader than the repeated action requires. Wrapper-specific approval is preferred over approving a general shell interpreter.
 

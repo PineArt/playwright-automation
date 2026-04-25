@@ -21,6 +21,9 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 open https://example.com --session gallery-a1-headed --mode headed --maximize
 & .\scripts\playwright-automation.ps1 snapshot --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 screenshot --session gallery-a1-headed --name home
+& .\scripts\playwright-automation.ps1 cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
+& .\scripts\playwright-automation.ps1 cookie list --session gallery-a1-headed --url http://127.0.0.1:5173 --redact
+& .\scripts\playwright-automation.ps1 cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
 & .\scripts\playwright-automation.ps1 run click e3 --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cli click e3 --session gallery-a1-headed
 & .\scripts\target-first.ps1 fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
@@ -47,6 +50,10 @@ bash ./scripts/playwright-automation.sh open https://example.com --session galle
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed --maximize
 bash ./scripts/playwright-automation.sh snapshot --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh screenshot --session gallery-a1-headed --name home
+export TEST_COOKIE
+bash ./scripts/playwright-automation.sh cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
+bash ./scripts/playwright-automation.sh cookie list --session gallery-a1-headed --url http://127.0.0.1:5173 --redact
+bash ./scripts/playwright-automation.sh cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
 bash ./scripts/playwright-automation.sh run click e3 --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cli click e3 --session gallery-a1-headed
 bash ./scripts/target-first.sh fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
@@ -69,3 +76,4 @@ Both shells should preserve:
 - the same exit code
 - the same artifact path convention
 - the same `[pw-auto]` error prefix
+- cookie values are redacted unless `cookie list --show-values` is explicitly requested
