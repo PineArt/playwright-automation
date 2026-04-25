@@ -46,8 +46,24 @@ Checks:
 
 - make sure `open` also includes `--mode headed`
 - avoid pairing `--maximize` with `--browser firefox` or `--browser webkit`
-- inspect `output/playwright/_pwauto/` to confirm the temporary config was generated
+- the generated temporary config is deleted after `open` returns
 - if you already set `--config`, ensure that file contains valid JSON so the wrapper can merge into it
+
+## `open` Basic Auth Does Not Log In
+
+Use the wrapper HTTP credential options for browser Basic Auth challenges:
+
+- `--http-username-env <ENV> --http-password-env <ENV>`
+- `--http-credentials-file <path>`
+
+The credentials file must be JSON with non-empty string `username` and `password` fields.
+Raw credential values are intentionally unsupported on the command line.
+
+Checks:
+
+- confirm both env vars exist and are non-empty
+- confirm the server is issuing an HTTP Basic challenge (`WWW-Authenticate: Basic ...`)
+- do not use these options for form-based login; use normal page interactions or cookie injection instead
 
 ## `open` Fails With `EPERM` On Windows
 

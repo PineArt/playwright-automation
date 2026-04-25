@@ -19,6 +19,8 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 doctor
 & .\scripts\playwright-automation.ps1 open https://example.com --session gallery-a1-headed --mode headed
 & .\scripts\playwright-automation.ps1 open https://example.com --session gallery-a1-headed --mode headed --maximize
+& .\scripts\playwright-automation.ps1 open http://127.0.0.1:8080 --session basic-auth-headed --mode headed --http-username-env BASIC_AUTH_USER --http-password-env BASIC_AUTH_PASS
+& .\scripts\playwright-automation.ps1 open http://127.0.0.1:8080 --session basic-auth-file --mode headed --http-credentials-file .\local.basic-auth.json
 & .\scripts\playwright-automation.ps1 snapshot --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 screenshot --session gallery-a1-headed --name home
 & .\scripts\playwright-automation.ps1 cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
@@ -48,6 +50,10 @@ bash ./scripts/playwright-automation.sh doctor
 bash ./scripts/target-first.sh help
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed --maximize
+export BASIC_AUTH_USER
+export BASIC_AUTH_PASS
+bash ./scripts/playwright-automation.sh open http://127.0.0.1:8080 --session basic-auth-headed --mode headed --http-username-env BASIC_AUTH_USER --http-password-env BASIC_AUTH_PASS
+bash ./scripts/playwright-automation.sh open http://127.0.0.1:8080 --session basic-auth-file --mode headed --http-credentials-file ./local.basic-auth.json
 bash ./scripts/playwright-automation.sh snapshot --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh screenshot --session gallery-a1-headed --name home
 export TEST_COOKIE
@@ -76,4 +82,5 @@ Both shells should preserve:
 - the same exit code
 - the same artifact path convention
 - the same `[pw-auto]` error prefix
+- Basic Auth credentials are redacted and should come from env vars or a JSON credentials file
 - cookie values are redacted unless `cookie list --show-values` is explicitly requested

@@ -55,7 +55,7 @@ function Write-Help {
         }
         "open" {
             $lines = @(
-                "[pw-auto] usage: playwright-automation [--workspace <path>] open <url> --session <name> --mode <headed|headless> [--maximize] [extra playwright-cli open flags]",
+                "[pw-auto] usage: playwright-automation [--workspace <path>] open <url> --session <name> --mode <headed|headless> [--maximize] [--http-username-env <ENV> --http-password-env <ENV> | --http-credentials-file <path>] [extra playwright-cli open flags]",
                 "[pw-auto] description: open a browser page in a named session",
                 "[pw-auto] required:",
                 "[pw-auto]   <url>",
@@ -64,6 +64,9 @@ function Write-Help {
                 "[pw-auto] notes:",
                 "[pw-auto]   headed maps to playwright-cli open --headed",
                 "[pw-auto]   --maximize injects a temporary config so Chromium-family browsers start maximized",
+                "[pw-auto]   Basic Auth uses Playwright context httpCredentials from env vars or a JSON file",
+                "[pw-auto]   --http-credentials-file expects JSON: {`"username`":`"...`",`"password`":`"...`"}",
+                "[pw-auto]   raw HTTP credential values are unsupported and credentials are never printed",
                 "[pw-auto]   extra flags are forwarded except wrapper-only options"
             )
         }
@@ -214,6 +217,16 @@ function Resolve-Npx {
     Fail "npx was not found on PATH."
 }
 
+function Resolve-Node {
+    if (Get-Command node.exe -ErrorAction SilentlyContinue) {
+        return "node.exe"
+    }
+    if (Get-Command node -ErrorAction SilentlyContinue) {
+        return "node"
+    }
+    Fail "node was not found on PATH."
+}
+
 function Invoke-PlaywrightCli {
     param(
         [string[]]$CliArguments
@@ -251,6 +264,33 @@ function Has-Flag {
 
     foreach ($token in $Tokens) {
         if ($token -eq $Flag) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Has-OptionToken {
+    param(
+        [string[]]$Tokens,
+        [string]$Name
+    )
+
+    foreach ($token in $Tokens) {
+        if ($token -eq $Name -or $token.StartsWith("$Name=")) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Has-AnyOpenHttpCredentialsOption {
+    param(
+        [string[]]$Tokens
+    )
+
+    foreach ($name in @("--http-username-env", "--http-password-env", "--http-credentials-file", "--http-username", "--http-password", "--http-credentials")) {
+        if (Has-OptionToken -Tokens $Tokens -Name $name) {
             return $true
         }
     }
@@ -328,7 +368,10 @@ function Resolve-OpenBaseConfigPath {
     )
 
     $configValue = Get-OptionValue -Tokens $Tokens -Name "--config"
-    if ($configValue) {
+    if (Has-OptionToken -Tokens $Tokens -Name "--config") {
+        if (-not $configValue) {
+            Fail "missing value for --config."
+        }
         return (Resolve-ConfigPath -Paths $Paths -ConfigValue $configValue)
     }
 
@@ -339,75 +382,40 @@ function Resolve-OpenBaseConfigPath {
     return ""
 }
 
-function New-MaximizedOpenConfig {
+function New-OpenConfig {
     param(
         [hashtable]$Paths,
         [string[]]$Tokens,
-        [string]$Session
+        [string]$Session,
+        [bool]$Maximize
     )
 
     $baseConfigPath = Resolve-OpenBaseConfigPath -Paths $Paths -Tokens $Tokens
-    $config = @{}
-    if ($baseConfigPath) {
-        if (-not (Test-Path -LiteralPath $baseConfigPath)) {
-            Fail "cannot apply --maximize because config '$baseConfigPath' does not exist."
-        }
-        $raw = Get-Content -LiteralPath $baseConfigPath -Raw
-        if ($raw.Trim()) {
-            try {
-                $config = ConvertFrom-Json -InputObject $raw -AsHashtable
-            } catch {
-                Fail "cannot apply --maximize because config '$baseConfigPath' is not valid JSON."
-            }
-        }
-    }
-
-    if (-not ($config -is [System.Collections.IDictionary])) {
-        $config = @{}
-    }
-
-    $browser = Ensure-MapValue -Parent $config -Key "browser"
-    $browserSelection = Get-OptionValue -Tokens $Tokens -Name "--browser"
-    if (-not $browserSelection -and $browser.Contains("browserName")) {
-        $browserSelection = [string]$browser["browserName"]
-    }
-    if ($browserSelection -in @("firefox", "webkit")) {
-        Fail "--maximize is supported only for Chromium-family browsers."
-    }
-
-    $launchOptions = Ensure-MapValue -Parent $browser -Key "launchOptions"
-    if ($browserSelection) {
-        if ($browserSelection -eq "chrome" -or $browserSelection -like "chrome-*") {
-            $browser["browserName"] = "chromium"
-            $launchOptions["channel"] = $browserSelection
-        } elseif ($browserSelection -eq "msedge" -or $browserSelection -like "msedge-*") {
-            $browser["browserName"] = "chromium"
-            $launchOptions["channel"] = $browserSelection
-        } else {
-            $browser["browserName"] = $browserSelection
-        }
-    }
-    $args = @()
-    if ($launchOptions.Contains("args") -and $null -ne $launchOptions["args"]) {
-        foreach ($item in @($launchOptions["args"])) {
-            $args += [string]$item
-        }
-    }
-    if (-not ($args -contains "--start-maximized")) {
-        $args += "--start-maximized"
-    }
-    $launchOptions["args"] = $args
-
-    $contextOptions = Ensure-MapValue -Parent $browser -Key "contextOptions"
-    $contextOptions["viewport"] = $null
-
-    $configDir = Join-Path $Paths.OutputRoot "_pwauto"
+    $configDir = Join-Path ([System.IO.Path]::GetTempPath()) "pw-auto"
     New-Item -ItemType Directory -Force -Path $configDir | Out-Null
     $safeSession = $Session -replace '[^A-Za-z0-9._-]', '_'
-    $tempPath = Join-Path $configDir ("open-{0}-maximize-{1}.json" -f $safeSession, (New-Timestamp))
-    $json = $config | ConvertTo-Json -Depth 20
-    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($tempPath, $json + [Environment]::NewLine, $utf8NoBom)
+    $tempPath = Join-Path $configDir ("open-{0}-{1}-{2}.json" -f $safeSession, (New-Timestamp), ([guid]::NewGuid().ToString("N")))
+    $helperPath = Join-Path $script:PwAutoScriptDir "open-config-helper.js"
+    $helperArgs = @("--workspace-root", $Paths.WorkspaceRoot, "--target", $tempPath)
+    if ($baseConfigPath) {
+        $helperArgs += @("--base", $baseConfigPath)
+    }
+    if ($Maximize) {
+        $helperArgs += "--maximize"
+        $browserSelection = Get-OptionValue -Tokens $Tokens -Name "--browser"
+        if ($browserSelection) {
+            $helperArgs += @("--browser", $browserSelection)
+        }
+    }
+    $helperArgs += "--"
+    $helperArgs += $Tokens
+
+    & (Resolve-Node) $helperPath @helperArgs
+    $helperExit = $LASTEXITCODE
+    if ($helperExit -ne 0) {
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        exit $helperExit
+    }
     return $tempPath
 }
 
@@ -541,6 +549,7 @@ function Invoke-Open {
     if ($maximize -and $mode -ne "headed") {
         Fail "--maximize requires --mode headed."
     }
+    $hasHttpCredentials = Has-AnyOpenHttpCredentialsOption -Tokens $rest
 
     $paths = Build-CommonEnv
 
@@ -549,12 +558,15 @@ function Invoke-Open {
 
     $skipValueNames = @("--mode", "--session")
     $skipFlags = @()
+    if ($hasHttpCredentials) {
+        $skipValueNames += @("--http-username-env", "--http-password-env", "--http-credentials-file", "--http-username", "--http-password", "--http-credentials")
+    }
+    if (($maximize -or $hasHttpCredentials) -and (Has-OptionToken -Tokens $rest -Name "--config")) {
+        $skipValueNames += "--config"
+    }
     if ($maximize) {
         $skipFlags += "--maximize"
-        if (Get-OptionValue -Tokens $rest -Name "--config") {
-            $skipValueNames += "--config"
-        }
-        if (Get-OptionValue -Tokens $rest -Name "--browser") {
+        if (Has-OptionToken -Tokens $rest -Name "--browser") {
             $skipValueNames += "--browser"
         }
     }
@@ -563,15 +575,25 @@ function Invoke-Open {
     if ($mode -eq "headed") {
         $cli += "--headed"
     }
-    if ($maximize) {
+    $tempConfigPath = ""
+    if ($maximize -or $hasHttpCredentials) {
         Remove-Item Env:PLAYWRIGHT_MCP_VIEWPORT_SIZE -ErrorAction SilentlyContinue
-        $cli += @("--config", (New-MaximizedOpenConfig -Paths $paths -Tokens $rest -Session $session))
+        $tempConfigPath = New-OpenConfig -Paths $paths -Tokens $rest -Session $session -Maximize $maximize
+        $cli += @("--config", $tempConfigPath)
     }
 
-    & (Resolve-Npx) @cli
-    $exitCode = $LASTEXITCODE
+    try {
+        & (Resolve-Npx) @cli
+        $exitCode = $LASTEXITCODE
+    } finally {
+        if ($tempConfigPath) {
+            Remove-Item -LiteralPath $tempConfigPath -Force -ErrorAction SilentlyContinue
+        }
+    }
     if ($exitCode -ne 0) {
         Write-Output "[pw-auto] session '$session' open failed. Run recover --session $session or inspect troubleshooting.md."
+    } elseif ($hasHttpCredentials) {
+        Write-Output "[pw-auto] httpCredentials applied username=<redacted> password=<redacted>"
     }
     exit $exitCode
 }

@@ -76,7 +76,7 @@ For command syntax in each shell, read `references/shell-syntax.md`.
 Use these wrapper commands:
 
 - `doctor`
-- `open <url> --session <name> --mode <headed|headless> [--maximize]`
+- `open <url> --session <name> --mode <headed|headless> [--maximize] [--http-username-env <ENV> --http-password-env <ENV> | --http-credentials-file <path>]`
 - `snapshot --session <name>`
 - `screenshot --session <name> [--name <label>] [--full-page] [target]`
 - `trace-start --session <name>`
@@ -95,6 +95,7 @@ Use these wrapper commands:
 Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `network` when there is no dedicated wrapper alias.
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
 Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last.
+Use `open` HTTP credential options for browser Basic Auth challenges. Prefer `--http-username-env` with `--http-password-env`, or `--http-credentials-file` with JSON `{"username":"...","password":"..."}`. Raw credential values are intentionally unsupported, and wrapper output redacts credentials.
 Use `cookie` for login-state injection during local UI verification. Always provide `--session` and `--url`; the wrapper does not infer origin or domain. Prefer `--value-env` or `--value-file` for secrets. Cookie values are redacted by default and are only shown by `cookie list` when `--show-values` is explicitly provided.
 
 ## Workflow
@@ -117,6 +118,7 @@ Use `cookie` for login-state injection during local UI verification. Always prov
 - Do not treat `doctor` as an installer; read its result first.
 - Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough.
 - Do not default to snapshot refs when you already have a stable unique selector; keep refs as the fallback.
+- Do not put Basic Auth passwords on the command line. Use the `open` HTTP credential env/file options so credentials are not echoed in output.
 - Do not use `run eval` with `document.cookie` for login-state injection. Use the `cookie` command so HttpOnly cookies work and values are not echoed in command output.
 - Do not assume the current environment can spawn browsers. In restricted sandboxes, `doctor` may report permission failures that require escalation or a different environment.
 - Do not persist an approval that is broader than the repeated action requires. Wrapper-specific approval is preferred over approving a general shell interpreter.

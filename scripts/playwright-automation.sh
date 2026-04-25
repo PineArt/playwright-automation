@@ -45,7 +45,7 @@ EOF
       ;;
     "open")
       cat <<'EOF'
-[pw-auto] usage: playwright-automation [--workspace <path>] open <url> --session <name> --mode <headed|headless> [--maximize] [extra playwright-cli open flags]
+[pw-auto] usage: playwright-automation [--workspace <path>] open <url> --session <name> --mode <headed|headless> [--maximize] [--http-username-env <ENV> --http-password-env <ENV> | --http-credentials-file <path>] [extra playwright-cli open flags]
 [pw-auto] description: open a browser page in a named session
 [pw-auto] required:
 [pw-auto]   <url>
@@ -54,6 +54,9 @@ EOF
 [pw-auto] notes:
 [pw-auto]   headed maps to playwright-cli open --headed
 [pw-auto]   --maximize injects a temporary config so Chromium-family browsers start maximized
+[pw-auto]   Basic Auth uses Playwright context httpCredentials from env vars or a JSON file
+[pw-auto]   --http-credentials-file expects JSON: {"username":"...","password":"..."}
+[pw-auto]   raw HTTP credential values are unsupported and credentials are never printed
 [pw-auto]   extra flags are forwarded except wrapper-only options
 EOF
       ;;
@@ -211,6 +214,28 @@ has_flag() {
   return 1
 }
 
+has_option_token() {
+  local name="$1"
+  shift
+  local token
+  for token in "$@"; do
+    if [[ "${token}" == "${name}" || "${token}" == "${name}="* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+has_open_http_credentials_option() {
+  local name
+  for name in --http-username-env --http-password-env --http-credentials-file --http-username --http-password --http-credentials; do
+    if has_option_token "${name}" "$@"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 require_session() {
   local session
   session="$(get_option_value --session "$@")" || fail "missing required --session <name>."
@@ -350,7 +375,8 @@ resolve_config_path() {
 resolve_open_base_config_path() {
   local config_value
   config_value="$(get_option_value --config "$@" || true)"
-  if [[ -n "${config_value}" ]]; then
+  if has_option_token --config "$@"; then
+    [[ -n "${config_value}" ]] || fail "missing value for --config."
     resolve_config_path "${workspace_root}" "${config_value}"
     return 0
   fi
@@ -361,83 +387,41 @@ resolve_open_base_config_path() {
   fi
 }
 
-create_maximized_open_config() {
+create_open_config() {
   local session="$1"
-  shift
+  local maximize="$2"
+  shift 2
 
   local base_config=""
   base_config="$(resolve_open_base_config_path "$@" || true)"
-  if [[ -n "${base_config}" && ! -f "${base_config}" ]]; then
-    fail "cannot apply --maximize because config '${base_config}' does not exist."
-  fi
-
-  local config_dir="${output_root}/_pwauto"
+  local tmp_base="${TMPDIR:-/tmp}"
+  local config_dir="${tmp_base}/pw-auto"
   mkdir -p "${config_dir}"
   local safe_session
   safe_session="$(printf '%s' "${session}" | tr -c 'A-Za-z0-9._-' '_')"
-  local temp_config="${config_dir}/open-${safe_session}-maximize-$(timestamp).json"
+  local temp_config="${config_dir}/open-${safe_session}-$(timestamp)-$RANDOM.json"
   local browser_name=""
   browser_name="$(get_option_value --browser "$@" || true)"
 
-  BASE_CONFIG="${base_config}" TARGET_CONFIG="${temp_config}" BROWSER_NAME="${browser_name}" node - <<'NODE'
-const fs = require('fs');
-const path = require('path');
+  local helper_args=(--workspace-root "${workspace_root}" --target "${temp_config}")
+  if [[ -n "${base_config}" ]]; then
+    helper_args+=(--base "${base_config}")
+  fi
+  if [[ "${maximize}" == "1" ]]; then
+    helper_args+=(--maximize)
+    if [[ -n "${browser_name}" ]]; then
+      helper_args+=(--browser "${browser_name}")
+    fi
+  fi
+  helper_args+=(-- "$@")
 
-const baseConfig = process.env.BASE_CONFIG || '';
-const targetConfig = process.env.TARGET_CONFIG;
-let config = {};
-
-if (baseConfig) {
-  try {
-    const raw = fs.readFileSync(baseConfig, 'utf8').trim();
-    if (raw)
-      config = JSON.parse(raw);
-  } catch (error) {
-    console.error(`[pw-auto] cannot apply --maximize because config '${baseConfig}' is not valid JSON.`);
-    process.exit(1);
-  }
-}
-
-if (!config || typeof config !== 'object' || Array.isArray(config))
-  config = {};
-
-if (!config.browser || typeof config.browser !== 'object' || Array.isArray(config.browser))
-  config.browser = {};
-
-const browserName = process.env.BROWSER_NAME || config.browser.browserName || '';
-if (browserName === 'firefox' || browserName === 'webkit') {
-  console.error('[pw-auto] --maximize is supported only for Chromium-family browsers.');
-  process.exit(1);
-}
-
-if (!config.browser.launchOptions || typeof config.browser.launchOptions !== 'object' || Array.isArray(config.browser.launchOptions))
-  config.browser.launchOptions = {};
-if (browserName) {
-  if (browserName === 'chrome' || browserName.startsWith('chrome-')) {
-    config.browser.browserName = 'chromium';
-    config.browser.launchOptions.channel = browserName;
-  } else if (browserName === 'msedge' || browserName.startsWith('msedge-')) {
-    config.browser.browserName = 'chromium';
-    config.browser.launchOptions.channel = browserName;
-  } else {
-    config.browser.browserName = browserName;
-  }
-}
-
-const launchArgs = Array.isArray(config.browser.launchOptions.args) ? config.browser.launchOptions.args.map(String) : [];
-if (!launchArgs.includes('--start-maximized'))
-  launchArgs.push('--start-maximized');
-config.browser.launchOptions.args = launchArgs;
-
-if (!config.browser.contextOptions || typeof config.browser.contextOptions !== 'object' || Array.isArray(config.browser.contextOptions))
-  config.browser.contextOptions = {};
-config.browser.contextOptions.viewport = null;
-
-fs.mkdirSync(path.dirname(targetConfig), { recursive: true });
-fs.writeFileSync(targetConfig, `${JSON.stringify(config, null, 2)}\n`);
-NODE
+  command -v node >/dev/null 2>&1 || fail "node was not found on PATH."
+  node "${script_dir}/open-config-helper.js" "${helper_args[@]}"
   local node_code=$?
-  [[ ${node_code} -eq 0 ]] || exit ${node_code}
+  if [[ ${node_code} -ne 0 ]]; then
+    rm -f "${temp_config}"
+    exit ${node_code}
+  fi
 
   printf '%s\n' "${temp_config}"
 }
@@ -481,17 +465,26 @@ open_cmd() {
     maximize=1
   fi
   [[ ${maximize} -eq 0 || "${mode}" == "headed" ]] || fail "--maximize requires --mode headed."
+  local has_http_credentials=0
+  if has_open_http_credentials_option "$@"; then
+    has_http_credentials=1
+  fi
 
   build_common_env
   ensure_npx
   local cli=(--session "${session}" open "${url}")
   local forward_args=(--values --mode --session)
-  if [[ ${maximize} -eq 1 ]]; then
-    forward_args+=(--flags --maximize)
-    if get_option_value --config "$@" >/dev/null 2>&1; then
+  if [[ ${has_http_credentials} -eq 1 ]]; then
+    forward_args+=(--values --http-username-env --http-password-env --http-credentials-file --http-username --http-password --http-credentials)
+  fi
+  if [[ ${maximize} -eq 1 || ${has_http_credentials} -eq 1 ]]; then
+    if has_option_token --config "$@"; then
       forward_args+=(--values --config)
     fi
-    if get_option_value --browser "$@" >/dev/null 2>&1; then
+  fi
+  if [[ ${maximize} -eq 1 ]]; then
+    forward_args+=(--flags --maximize)
+    if has_option_token --browser "$@"; then
       forward_args+=(--values --browser)
     fi
   fi
@@ -500,17 +493,28 @@ open_cmd() {
   if [[ "${mode}" == "headed" ]]; then
     cli+=(--headed)
   fi
-  if [[ ${maximize} -eq 1 ]]; then
+  local temp_config=""
+  if [[ ${maximize} -eq 1 || ${has_http_credentials} -eq 1 ]]; then
     unset PLAYWRIGHT_MCP_VIEWPORT_SIZE
-    local temp_config
-    temp_config="$(create_maximized_open_config "${session}" "$@")"
+    local config_status=0
+    temp_config="$(create_open_config "${session}" "${maximize}" "$@")" || config_status=$?
+    if [[ ${config_status} -ne 0 ]]; then
+      exit ${config_status}
+    fi
+    trap '[[ -n "${temp_config:-}" ]] && rm -f "${temp_config}"' EXIT
     cli+=(--config "${temp_config}")
   fi
 
   "${npx_cmd}" "${cli_prefix[@]}" "${cli[@]}"
   local code=$?
+  if [[ -n "${temp_config}" ]]; then
+    rm -f "${temp_config}"
+    trap - EXIT
+  fi
   if [[ ${code} -ne 0 ]]; then
     printf '%s\n' "[pw-auto] session '${session}' open failed. Run recover --session ${session} or inspect troubleshooting.md."
+  elif [[ ${has_http_credentials} -eq 1 ]]; then
+    printf '%s\n' "[pw-auto] httpCredentials applied username=<redacted> password=<redacted>"
   fi
   exit ${code}
 }
