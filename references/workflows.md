@@ -11,6 +11,8 @@ Use this file when the basic loop in `SKILL.md` is not enough.
 5. Re-snapshot when the UI changes.
 6. Save evidence in `output/playwright/<session>/`.
 
+`open` is the browser-page create/recreate entrypoint. Once a session exists, prefer `goto` and `reload` so injected cookies, local storage, and current tab state are not lost unexpectedly.
+
 ## Why One Agent Maps To One Session
 
 The skill assumes one agent owns one session.
@@ -47,20 +49,82 @@ This keeps artifact paths and recovery commands obvious.
 1. `open` with explicit mode and session.
 2. `snapshot`.
 3. Prefer stable selectors first and latest snapshot refs second.
-4. Use `target-first fill --text ... --target "<stable selector>" --target e12`.
+4. Use `playwright-automation target-first fill --text ... --target "<stable selector>" --target e12`.
 5. For submit-oriented flows, prefer `run fill ... --submit` on the final editable field or `run press Enter`.
-6. If a button is still needed, use `target-first click --target "<stable selector>" --target e21 --settle-ms 1500`.
+6. If a button is still needed, use `playwright-automation target-first click --target "<stable selector>" --target e21 --settle-ms 1500`.
 7. `snapshot`.
 8. `screenshot --name submitted`.
 
 Example:
 
 ```text
-target-first fill --session login-headed --text my-user --target "#username" --target e12
+playwright-automation target-first fill --session login-headed --text my-user --target "#username" --target e12
 playwright-automation run fill "#password" my-pass --submit --session login-headed
 playwright-automation run eval "() => new Promise((resolve) => setTimeout(resolve, 2000))" --session login-headed
 playwright-automation snapshot --session login-headed
 ```
+
+For React, Vue, or other SPA flows, add an explicit settle or wait after clicks that trigger routing, list expansion, or async rendering. A click followed immediately by `eval` can read the old DOM and should not be treated as a product failure by itself.
+
+## Cookie Login State
+
+Use this when a local app accepts an existing session cookie and you need to verify UI after login without running the form login flow.
+
+```text
+playwright-automation open http://127.0.0.1:5173 --session local-a1-headless --mode headless
+playwright-automation cookie set --session local-a1-headless --url http://127.0.0.1:5173 --name app_session --value-env APP_SESSION --path / --http-only
+playwright-automation cookie list --session local-a1-headless --url http://127.0.0.1:5173 --redact
+playwright-automation reload --session local-a1-headless
+playwright-automation snapshot --session local-a1-headless
+playwright-automation run run-code "async page => ({ status: (await (await page.request.get('http://127.0.0.1:5173/api/auth/session')).status()), url: page.url(), title: await page.title() })" --session local-a1-headless
+```
+
+If `cookie set` succeeds but `cookie list` returns `count=0`, or the page still shows the login view after `reload`/`goto`, classify the current result as session-state verification failure, not an authenticated UI failure. Re-check `--url`, `--domain`, `--path`, `--secure`, `sameSite`, and whether the app reads a different cookie name.
+
+Do not set a cookie and then call `open` again unless you are intentionally recreating the browser page. Use `reload` for the same URL, or `goto <url> --session <name>` for a route change inside the existing session.
+
+## Wait Templates
+
+Use `--settle-ms` for simple post-action delay:
+
+```text
+playwright-automation target-first click --session local-a1-headless --target "table button.windchill-link-button >> text=Shanghai项目" --target e42 --settle-ms 3000
+```
+
+Wait for a selector:
+
+```text
+playwright-automation run run-code "async page => { await page.waitForSelector('.flush-panel', { timeout: 5000 }); return document.querySelectorAll('.flush-panel').length; }" --session local-a1-headless
+```
+
+Wait for text:
+
+```text
+playwright-automation run run-code "async page => { await page.getByText('交付件', { exact: true }).waitFor({ timeout: 5000 }); return true; }" --session local-a1-headless
+```
+
+Wait for a DOM predicate:
+
+```text
+playwright-automation run run-code "async page => page.waitForFunction(() => document.querySelectorAll('.flush-panel').length > 0, null, { timeout: 5000 })" --session local-a1-headless
+```
+
+Check an auth/session endpoint from the page context:
+
+```text
+playwright-automation run run-code "async page => { const res = await page.request.get('http://127.0.0.1:5173/api/auth/session'); return { status: res.status(), body: await res.text() }; }" --session local-a1-headless
+```
+
+## Hash Routes
+
+Hash route changes are SPA state changes, not full browser reloads.
+
+- `open <url#route>` may create or recreate the browser page.
+- `goto <url#route> --session <name>` navigates inside the existing session.
+- Setting `window.location.href` or `window.location.hash` to the same hash may not rerun auth checks or route loaders.
+- `reload --session <name>` forces the current route to re-read cookies and app bootstrap state.
+
+After cookie injection, prefer `reload` for the same hash route or `goto` for a materially different route, then `snapshot` and app-state verification.
 
 ## UI Debugging
 
@@ -73,6 +137,26 @@ When a flow is visually wrong:
 5. Use `run console` or `run network`.
 6. Use `trace-start` before suspicious actions.
 7. Use `trace-stop` after reproducing.
+
+For text selectors, scope first. Prefer selectors like `table button.windchill-link-button >> text=Shanghai项目`, exact role/label locators when available, or a ref from the latest snapshot. If `target-first` reports `automation-failure=selector-not-unique`, fix the automation selector before judging the product.
+
+## Result Classification
+
+Treat these as automation failures:
+
+- wrong wrapper path or missing script entrypoint
+- session not open, stale, or unexpectedly recreated
+- selector strict-mode violation or multi-match ambiguity
+- click/eval race before React or route rendering settles
+- using an old snapshot ref after navigation or DOM refresh
+
+Treat a product verification failure as valid only after the automation has:
+
+- used the expected existing session
+- verified cookies/storage or login state when relevant
+- waited for the async UI condition that should appear
+- captured a fresh snapshot or screenshot
+- checked console/network/auth endpoint when the UI state is ambiguous
 
 ## Data Extraction
 

@@ -76,6 +76,24 @@ function Invoke-WrapperCapture {
     }
 }
 
+function Test-SelectorNotUnique {
+    param(
+        [string]$Output
+    )
+    if (-not $Output) {
+        return $false
+    }
+    return $Output -match '(?i)strict mode violation|resolved to \d+ elements|locator.*matched|matched \d+ elements|matches \d+ elements'
+}
+
+function Show-SelectorNotUniqueDiagnostic {
+    param(
+        [string]$Target
+    )
+    Write-Output "[pw-auto] automation-failure=selector-not-unique target=$Target"
+    Write-Output "[pw-auto] suggestion=add a container scope, use an exact role/label selector, or fall back to a ref from the latest snapshot"
+}
+
 function Show-Help {
     @(
         "[pw-auto] usage:",
@@ -120,6 +138,7 @@ switch ($command) {
 
         $submit = Has-Flag -Tokens $tokens -Flag "--submit"
         $lastFailure = ""
+        $selectorNotUniqueTarget = ""
         foreach ($target in $targets) {
             $wrapperArgs = @("run", "fill", $target, $text, "--session", $session)
             if ($submit) {
@@ -138,9 +157,15 @@ switch ($command) {
                 exit 0
             }
             $lastFailure = $result.Output
+            if (-not $selectorNotUniqueTarget -and (Test-SelectorNotUnique -Output $lastFailure)) {
+                $selectorNotUniqueTarget = $target
+            }
         }
 
         Write-Output "[pw-auto] target-first fill failed. None of the provided targets worked for session '$session'."
+        if ($selectorNotUniqueTarget) {
+            Show-SelectorNotUniqueDiagnostic -Target $selectorNotUniqueTarget
+        }
         if ($lastFailure) {
             Write-Output $lastFailure
         }
@@ -165,6 +190,7 @@ switch ($command) {
         }
 
         $lastFailure = ""
+        $selectorNotUniqueTarget = ""
         foreach ($target in $targets) {
             $wrapperArgs = @("run", "click", $target, "--session", $session)
             if ($button) {
@@ -186,9 +212,15 @@ switch ($command) {
                 exit 0
             }
             $lastFailure = $result.Output
+            if (-not $selectorNotUniqueTarget -and (Test-SelectorNotUnique -Output $lastFailure)) {
+                $selectorNotUniqueTarget = $target
+            }
         }
 
         Write-Output "[pw-auto] target-first click failed. None of the provided targets worked for session '$session'."
+        if ($selectorNotUniqueTarget) {
+            Show-SelectorNotUniqueDiagnostic -Target $selectorNotUniqueTarget
+        }
         if ($lastFailure) {
             Write-Output $lastFailure
         }

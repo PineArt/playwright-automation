@@ -10,7 +10,6 @@ Set a convenient wrapper variable:
 
 ```powershell
 $pwauto = ".\scripts\playwright-automation.ps1"
-$pwtarget = ".\scripts\target-first.ps1"
 ```
 
 Recommended direct usage:
@@ -21,6 +20,8 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 open https://example.com --session gallery-a1-headed --mode headed --maximize
 & .\scripts\playwright-automation.ps1 open http://127.0.0.1:8080 --session basic-auth-headed --mode headed --http-username-env BASIC_AUTH_USER --http-password-env BASIC_AUTH_PASS
 & .\scripts\playwright-automation.ps1 open http://127.0.0.1:8080 --session basic-auth-file --mode headed --http-credentials-file .\local.basic-auth.json
+& .\scripts\playwright-automation.ps1 goto http://127.0.0.1:5173/#/dashboard --session gallery-a1-headed
+& .\scripts\playwright-automation.ps1 reload --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 snapshot --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 screenshot --session gallery-a1-headed --name home
 & .\scripts\playwright-automation.ps1 cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
@@ -28,9 +29,9 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
 & .\scripts\playwright-automation.ps1 run click e3 --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cli click e3 --session gallery-a1-headed
-& .\scripts\target-first.ps1 fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
+& .\scripts\playwright-automation.ps1 target-first fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
 & .\scripts\playwright-automation.ps1 run fill "#password" "secret" --submit --session gallery-a1-headed
-& .\scripts\target-first.ps1 click --session gallery-a1-headed --target "#login" --target e21 --settle-ms 2000
+& .\scripts\playwright-automation.ps1 target-first click --session gallery-a1-headed --target "#login" --target e21 --settle-ms 2000
 & .\scripts\playwright-automation.ps1 recover --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cleanup --session gallery-a1-headed
 ```
@@ -47,13 +48,15 @@ Recommended direct usage:
 
 ```bash
 bash ./scripts/playwright-automation.sh doctor
-bash ./scripts/target-first.sh help
+bash ./scripts/playwright-automation.sh help target-first
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed
 bash ./scripts/playwright-automation.sh open https://example.com --session gallery-a1-headed --mode headed --maximize
 export BASIC_AUTH_USER
 export BASIC_AUTH_PASS
 bash ./scripts/playwright-automation.sh open http://127.0.0.1:8080 --session basic-auth-headed --mode headed --http-username-env BASIC_AUTH_USER --http-password-env BASIC_AUTH_PASS
 bash ./scripts/playwright-automation.sh open http://127.0.0.1:8080 --session basic-auth-file --mode headed --http-credentials-file ./local.basic-auth.json
+bash ./scripts/playwright-automation.sh goto http://127.0.0.1:5173/#/dashboard --session gallery-a1-headed
+bash ./scripts/playwright-automation.sh reload --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh snapshot --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh screenshot --session gallery-a1-headed --name home
 export TEST_COOKIE
@@ -62,9 +65,9 @@ bash ./scripts/playwright-automation.sh cookie list --session gallery-a1-headed 
 bash ./scripts/playwright-automation.sh cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
 bash ./scripts/playwright-automation.sh run click e3 --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cli click e3 --session gallery-a1-headed
-bash ./scripts/target-first.sh fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
+bash ./scripts/playwright-automation.sh target-first fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
 bash ./scripts/playwright-automation.sh run fill "#password" "secret" --submit --session gallery-a1-headed
-bash ./scripts/target-first.sh click --session gallery-a1-headed --target "#login" --target e21 --settle-ms 2000
+bash ./scripts/playwright-automation.sh target-first click --session gallery-a1-headed --target "#login" --target e21 --settle-ms 2000
 bash ./scripts/playwright-automation.sh recover --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cleanup --session gallery-a1-headed
 ```

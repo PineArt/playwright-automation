@@ -25,11 +25,14 @@ function Write-Help {
                 "[pw-auto] commands:",
                 "[pw-auto]   doctor       print workspace paths and playwright-cli session state",
                 "[pw-auto]   open         open a URL with explicit --mode and --session",
+                "[pw-auto]   goto         navigate an existing session without reopening it",
+                "[pw-auto]   reload       reload the current page in an existing session",
                 "[pw-auto]   snapshot     capture current refs for an existing session",
                 "[pw-auto]   screenshot   save a screenshot under output/playwright/<session>/",
                 "[pw-auto]   trace-start  start Playwright tracing for a session",
                 "[pw-auto]   trace-stop   stop Playwright tracing for a session",
                 "[pw-auto]   cookie       set, list, or clear cookies without echoing values",
+                "[pw-auto]   target-first selector-first, ref-fallback fill/click helper",
                 "[pw-auto]   sessions     list active Playwright CLI sessions",
                 "[pw-auto]   recover      attempt non-destructive recovery for one session",
                 "[pw-auto]   cleanup      close one session and optionally delete its data",
@@ -67,7 +70,29 @@ function Write-Help {
                 "[pw-auto]   Basic Auth uses Playwright context httpCredentials from env vars or a JSON file",
                 "[pw-auto]   --http-credentials-file expects JSON: {`"username`":`"...`",`"password`":`"...`"}",
                 "[pw-auto]   raw HTTP credential values are unsupported and credentials are never printed",
+                "[pw-auto]   open is a create/recreate entrypoint; use goto or reload for an existing stateful session",
                 "[pw-auto]   extra flags are forwarded except wrapper-only options"
+            )
+        }
+        "goto" {
+            $lines = @(
+                "[pw-auto] usage: playwright-automation [--workspace <path>] goto <url> --session <name> [extra playwright-cli goto flags]",
+                "[pw-auto] description: navigate an existing session without reopening or recreating it",
+                "[pw-auto] required:",
+                "[pw-auto]   <url>",
+                "[pw-auto]   --session <name>",
+                "[pw-auto] notes:",
+                "[pw-auto]   use after cookie/state injection when the existing page should consume the new state"
+            )
+        }
+        "reload" {
+            $lines = @(
+                "[pw-auto] usage: playwright-automation [--workspace <path>] reload --session <name> [extra playwright-cli reload flags]",
+                "[pw-auto] description: reload the current page in an existing session",
+                "[pw-auto] required:",
+                "[pw-auto]   --session <name>",
+                "[pw-auto] notes:",
+                "[pw-auto]   use after cookie/state injection or same-hash route checks"
             )
         }
         "snapshot" {
@@ -121,7 +146,20 @@ function Write-Help {
                 "[pw-auto]   values are redacted by default and never printed by set or clear",
                 "[pw-auto]   set reads values from --value-env or --value-file; raw --value is intentionally unsupported",
                 "[pw-auto]   list redacts values unless --show-values is explicitly provided",
-                "[pw-auto]   --url is always required; the wrapper does not guess origin or domain"
+                "[pw-auto]   --url is always required; the wrapper does not guess origin or domain",
+                "[pw-auto]   cookie set success only proves injection; verify with cookie list, reload/goto, snapshot, and app auth state"
+            )
+        }
+        "target-first" {
+            $lines = @(
+                "[pw-auto] usage: playwright-automation [--workspace <path>] target-first <fill|click> --session <name> [options]",
+                "[pw-auto] description: invoke scripts/target-first.ps1 through the main wrapper entrypoint",
+                "[pw-auto] examples:",
+                "[pw-auto]   playwright-automation target-first fill --session <name> --text <value> --target <stable selector> --target e12",
+                "[pw-auto]   playwright-automation target-first click --session <name> --target <stable selector> --target e21 --settle-ms 1500",
+                "[pw-auto] notes:",
+                "[pw-auto]   order targets as scoped stable selectors first and latest snapshot refs last",
+                "[pw-auto]   if a selector is ambiguous, add a container scope, exact role/label, or latest snapshot ref"
             )
         }
         "sessions" {
@@ -332,6 +370,19 @@ function Build-CommonEnv {
 
 function Build-CliPrefix {
     return @("--yes", "--package", "@playwright/cli", "playwright-cli")
+}
+
+function Test-SessionMetadataExists {
+    param(
+        [hashtable]$Paths,
+        [string]$Session
+    )
+    $direct = Join-Path $Paths.DaemonRoot "$Session.session"
+    if (Test-Path -LiteralPath $direct) {
+        return $true
+    }
+    $matches = Get-ChildItem -LiteralPath $Paths.DaemonRoot -Recurse -Filter "$Session.session" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    return $null -ne $matches
 }
 
 function Resolve-ConfigPath {
@@ -552,6 +603,9 @@ function Invoke-Open {
     $hasHttpCredentials = Has-AnyOpenHttpCredentialsOption -Tokens $rest
 
     $paths = Build-CommonEnv
+    if (Test-SessionMetadataExists -Paths $paths -Session $session) {
+        Write-Output "[pw-auto] warning: session '$session' already has metadata; open can recreate page/in-memory state. Use goto or reload for existing cookie/state verification."
+    }
 
     $cli = Build-CliPrefix
     $cli += @("--session", $session, "open", $url)
@@ -606,6 +660,39 @@ function Invoke-Snapshot {
     Build-CommonEnv | Out-Null
     $cli = Build-CliPrefix
     $cli += @("--session", $session, "snapshot")
+    Add-ForwardTokens -Target ([ref]$cli) -Tokens $Tokens -SkipValueNames @("--session")
+    Invoke-PlaywrightCli -CliArguments $cli
+}
+
+function Invoke-Goto {
+    param(
+        [string[]]$Tokens
+    )
+    if ($Tokens.Length -lt 1) {
+        Fail "goto requires a URL."
+    }
+
+    $url = $Tokens[0]
+    $rest = @()
+    if ($Tokens.Length -gt 1) {
+        $rest = $Tokens[1..($Tokens.Length - 1)]
+    }
+    $session = Ensure-SessionOption -Tokens $rest
+    Build-CommonEnv | Out-Null
+    $cli = Build-CliPrefix
+    $cli += @("--session", $session, "goto", $url)
+    Add-ForwardTokens -Target ([ref]$cli) -Tokens $rest -SkipValueNames @("--session")
+    Invoke-PlaywrightCli -CliArguments $cli
+}
+
+function Invoke-Reload {
+    param(
+        [string[]]$Tokens
+    )
+    $session = Ensure-SessionOption -Tokens $Tokens
+    Build-CommonEnv | Out-Null
+    $cli = Build-CliPrefix
+    $cli += @("--session", $session, "reload")
     Add-ForwardTokens -Target ([ref]$cli) -Tokens $Tokens -SkipValueNames @("--session")
     Invoke-PlaywrightCli -CliArguments $cli
 }
@@ -680,6 +767,28 @@ function Invoke-Cookie {
     $helperPath = Join-Path $script:PwAutoScriptDir "cookie-helper.js"
     & $nodeCommand $helperPath "--output-root" $paths.OutputRoot "--workspace-root" $paths.WorkspaceRoot "--daemon-root" $paths.DaemonRoot @Tokens
     $exitCode = $LASTEXITCODE
+    exit $exitCode
+}
+
+function Invoke-TargetFirst {
+    param(
+        [string[]]$Tokens
+    )
+    $helper = Join-Path $script:PwAutoScriptDir "target-first.ps1"
+    $previousWorkspace = $env:PW_AUTO_WORKSPACE
+    if ($script:PwAutoWorkspaceOverride) {
+        $env:PW_AUTO_WORKSPACE = Resolve-WorkspaceRoot
+    }
+    try {
+        & $helper @Tokens
+        $exitCode = $LASTEXITCODE
+    } finally {
+        if ($null -eq $previousWorkspace) {
+            Remove-Item Env:PW_AUTO_WORKSPACE -ErrorAction SilentlyContinue
+        } else {
+            $env:PW_AUTO_WORKSPACE = $previousWorkspace
+        }
+    }
     exit $exitCode
 }
 
@@ -799,11 +908,14 @@ switch ($command) {
     "-h" { Write-Help }
     "doctor" { Invoke-Doctor }
     "open" { Invoke-Open -Tokens $restArgs }
+    "goto" { Invoke-Goto -Tokens $restArgs }
+    "reload" { Invoke-Reload -Tokens $restArgs }
     "snapshot" { Invoke-Snapshot -Tokens $restArgs }
     "screenshot" { Invoke-Screenshot -Tokens $restArgs }
     "trace-start" { Invoke-TraceStart -Tokens $restArgs }
     "trace-stop" { Invoke-TraceStop -Tokens $restArgs }
     "cookie" { Invoke-Cookie -Tokens $restArgs }
+    "target-first" { Invoke-TargetFirst -Tokens $restArgs }
     "sessions" { Invoke-Sessions }
     "recover" { Invoke-Recover -Tokens $restArgs }
     "cleanup" { Invoke-Cleanup -Tokens $restArgs }

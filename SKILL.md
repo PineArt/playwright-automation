@@ -49,6 +49,7 @@ playwright-automation <command> [args] [options]
 The wrappers normalize:
 
 - explicit mode enforcement for `open`
+- existing-session navigation through `goto` and `reload`
 - current-workspace defaults instead of install-location defaults
 - session and artifact environment defaults
 - deterministic error prefixes
@@ -64,7 +65,7 @@ Core loop:
 playwright-automation doctor
 playwright-automation open https://example.com --session gallery-a1-headed --mode headed
 playwright-automation snapshot --session gallery-a1-headed
-target-first click --session gallery-a1-headed --target "#primary-action" --target e3 --settle-ms 1500
+playwright-automation target-first click --session gallery-a1-headed --target "#primary-action" --target e3 --settle-ms 1500
 playwright-automation snapshot --session gallery-a1-headed
 playwright-automation screenshot --session gallery-a1-headed --name after-click
 ```
@@ -77,11 +78,13 @@ Use these wrapper commands:
 
 - `doctor`
 - `open <url> --session <name> --mode <headed|headless> [--maximize] [--http-username-env <ENV> --http-password-env <ENV> | --http-credentials-file <path>]`
+- `goto <url> --session <name>`
+- `reload --session <name>`
 - `snapshot --session <name>`
 - `screenshot --session <name> [--name <label>] [--full-page] [target]`
 - `trace-start --session <name>`
 - `trace-stop --session <name>`
-- `scripts/target-first.ps1` or `scripts/target-first.sh` for selector-first, ref-fallback interactions
+- `target-first <fill|click> ...` for selector-first, ref-fallback interactions
 - `cookie set --session <name> --url <url> --name <cookie_name> --value-env <ENV_NAME> [--path /] [--domain <domain>] [--same-site Strict|Lax|None] [--secure] [--http-only]`
 - `cookie set --session <name> --url <url> --name <cookie_name> --value-file <path> [same options]`
 - `cookie list --session <name> --url <url> [--redact|--show-values]`
@@ -93,10 +96,12 @@ Use these wrapper commands:
 - `cli ...` and `raw ...` as explicit passthrough aliases for `run ...`
 
 Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `network` when there is no dedicated wrapper alias.
+Use `open` only to create or intentionally recreate a browser page. It can reset page-level in-memory state; after injecting cookies or storage into an existing session, use `reload` or `goto`, not another `open`.
+Use `goto` to navigate an existing session without reopening it. Use `reload` when the current URL, hash route, or newly injected cookie should be re-read by the app.
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
-Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last.
+Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last. Prefer scoped selectors such as `table button.some-row-action`, exact role/label selectors when available, and refs from the latest snapshot when text selectors are ambiguous.
 Use `open` HTTP credential options for browser Basic Auth challenges. Prefer `--http-username-env` with `--http-password-env`, or `--http-credentials-file` with JSON `{"username":"...","password":"..."}`. Raw credential values are intentionally unsupported, and wrapper output redacts credentials.
-Use `cookie` for login-state injection during local UI verification. Always provide `--session` and `--url`; the wrapper does not infer origin or domain. Prefer `--value-env` or `--value-file` for secrets. Cookie values are redacted by default and are only shown by `cookie list` when `--show-values` is explicitly provided.
+Use `cookie` for login-state injection during local UI verification. Always provide `--session` and `--url`; the wrapper does not infer origin or domain. Prefer `--value-env` or `--value-file` for secrets. Cookie values are redacted by default and are only shown by `cookie list` when `--show-values` is explicitly provided. `cookie set` success only proves the browser context accepted the cookie; verify with `cookie list`, `reload` or `goto`, `snapshot`, and an app-level authenticated state check such as `/api/auth/session` or visible page state.
 
 ## Workflow
 
@@ -104,19 +109,20 @@ Use `cookie` for login-state injection during local UI verification. Always prov
 2. Open with explicit mode and named session.
 3. Snapshot to get current refs.
 4. Interact. Prefer stable selectors first and refs from the latest snapshot second.
-5. For submit-oriented flows, prefer `fill --submit`, `press Enter`, or `target-first ... --settle-ms`.
+5. For submit-oriented or SPA flows, prefer `fill --submit`, `press Enter`, or `target-first ... --settle-ms`; do not treat a click followed by an immediate `eval` as a failure conclusion.
 6. Snapshot again after state changes.
 7. Capture artifacts when the step matters.
-8. If a command fails, inspect the error prefix and use `recover --session <name>` before escalating.
+8. If a command fails, inspect the error prefix. Wrapper path, session setup, selector ambiguity, and strict-mode errors are automation failures, not product failures.
 9. If the same permission prompt keeps recurring, prefer a persisted approval for that specific wrapper command family before continuing the loop.
 
 ## Guardrails
 
 - Do not omit `--mode` on `open`.
+- Do not call `open` after cookie or storage injection unless you intentionally want to rebuild the page/session surface; use `reload` or `goto` for existing sessions.
 - Do not create a second session for the same agent unless you are intentionally abandoning the old one.
 - Do not use `recover` without `--session`.
 - Do not treat `doctor` as an installer; read its result first.
-- Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough.
+- Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough. Diagnostic reads such as `document.title`, error-overlay checks, or app-session endpoint checks are acceptable.
 - Do not default to snapshot refs when you already have a stable unique selector; keep refs as the fallback.
 - Do not put Basic Auth passwords on the command line. Use the `open` HTTP credential env/file options so credentials are not echoed in output.
 - Do not use `run eval` with `document.cookie` for login-state injection. Use the `cookie` command so HttpOnly cookies work and values are not echoed in command output.

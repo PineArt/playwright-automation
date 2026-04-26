@@ -15,11 +15,14 @@ write_help() {
 [pw-auto] commands:
 [pw-auto]   doctor       print workspace paths and playwright-cli session state
 [pw-auto]   open         open a URL with explicit --mode and --session
+[pw-auto]   goto         navigate an existing session without reopening it
+[pw-auto]   reload       reload the current page in an existing session
 [pw-auto]   snapshot     capture current refs for an existing session
 [pw-auto]   screenshot   save a screenshot under output/playwright/<session>/
 [pw-auto]   trace-start  start Playwright tracing for a session
 [pw-auto]   trace-stop   stop Playwright tracing for a session
 [pw-auto]   cookie       set, list, or clear cookies without echoing values
+[pw-auto]   target-first selector-first, ref-fallback fill/click helper
 [pw-auto]   sessions     list active Playwright CLI sessions
 [pw-auto]   recover      attempt non-destructive recovery for one session
 [pw-auto]   cleanup      close one session and optionally delete its data
@@ -57,7 +60,29 @@ EOF
 [pw-auto]   Basic Auth uses Playwright context httpCredentials from env vars or a JSON file
 [pw-auto]   --http-credentials-file expects JSON: {"username":"...","password":"..."}
 [pw-auto]   raw HTTP credential values are unsupported and credentials are never printed
+[pw-auto]   open is a create/recreate entrypoint; use goto or reload for an existing stateful session
 [pw-auto]   extra flags are forwarded except wrapper-only options
+EOF
+      ;;
+    "goto")
+      cat <<'EOF'
+[pw-auto] usage: playwright-automation [--workspace <path>] goto <url> --session <name> [extra playwright-cli goto flags]
+[pw-auto] description: navigate an existing session without reopening or recreating it
+[pw-auto] required:
+[pw-auto]   <url>
+[pw-auto]   --session <name>
+[pw-auto] notes:
+[pw-auto]   use after cookie/state injection when the existing page should consume the new state
+EOF
+      ;;
+    "reload")
+      cat <<'EOF'
+[pw-auto] usage: playwright-automation [--workspace <path>] reload --session <name> [extra playwright-cli reload flags]
+[pw-auto] description: reload the current page in an existing session
+[pw-auto] required:
+[pw-auto]   --session <name>
+[pw-auto] notes:
+[pw-auto]   use after cookie/state injection or same-hash route checks
 EOF
       ;;
     "snapshot")
@@ -112,6 +137,19 @@ EOF
 [pw-auto]   set reads values from --value-env or --value-file; raw --value is intentionally unsupported
 [pw-auto]   list redacts values unless --show-values is explicitly provided
 [pw-auto]   --url is always required; the wrapper does not guess origin or domain
+[pw-auto]   cookie set success only proves injection; verify with cookie list, reload/goto, snapshot, and app auth state
+EOF
+      ;;
+    "target-first")
+      cat <<'EOF'
+[pw-auto] usage: playwright-automation [--workspace <path>] target-first <fill|click> --session <name> [options]
+[pw-auto] description: invoke scripts/target-first.sh through the main wrapper entrypoint
+[pw-auto] examples:
+[pw-auto]   playwright-automation target-first fill --session <name> --text <value> --target <stable selector> --target e12
+[pw-auto]   playwright-automation target-first click --session <name> --target <stable selector> --target e21 --settle-ms 1500
+[pw-auto] notes:
+[pw-auto]   order targets as scoped stable selectors first and latest snapshot refs last
+[pw-auto]   if a selector is ambiguous, add a container scope, exact role/label, or latest snapshot ref
 EOF
       ;;
     "sessions")
@@ -234,6 +272,14 @@ has_open_http_credentials_option() {
     fi
   done
   return 1
+}
+
+session_metadata_exists() {
+  local root="$1"
+  local session="$2"
+  [[ -n "${root}" ]] || return 1
+  [[ -f "${root}/${session}.session" ]] && return 0
+  find "${root}" -name "${session}.session" -type f -print -quit 2>/dev/null | grep -q .
 }
 
 require_session() {
@@ -471,6 +517,9 @@ open_cmd() {
   fi
 
   build_common_env
+  if session_metadata_exists "${daemon_root}" "${session}"; then
+    printf '%s\n' "[pw-auto] warning: session '${session}' already has metadata; open can recreate page/in-memory state. Use goto or reload for existing cookie/state verification."
+  fi
   ensure_npx
   local cli=(--session "${session}" open "${url}")
   local forward_args=(--values --mode --session)
@@ -528,6 +577,27 @@ snapshot_cmd() {
   run_cli "${cli[@]}"
 }
 
+goto_cmd() {
+  [[ $# -ge 1 ]] || fail "goto requires a URL."
+  local url="$1"
+  shift
+  build_common_env
+  local session
+  session="$(require_session "$@")"
+  local cli=(--session "${session}" goto "${url}")
+  forward_tokens cli --values --session -- "$@"
+  run_cli "${cli[@]}"
+}
+
+reload_cmd() {
+  build_common_env
+  local session
+  session="$(require_session "$@")"
+  local cli=(--session "${session}" reload)
+  forward_tokens cli --values --session -- "$@"
+  run_cli "${cli[@]}"
+}
+
 screenshot_cmd() {
   build_common_env
   ensure_npx
@@ -576,6 +646,15 @@ cookie_cmd() {
   build_common_env
   command -v node >/dev/null 2>&1 || fail "node was not found on PATH."
   node "${script_dir}/cookie-helper.js" --output-root "${output_root}" --workspace-root "${workspace_root}" --daemon-root "${daemon_root}" "$@"
+  exit $?
+}
+
+target_first_cmd() {
+  if [[ -n "${pw_auto_workspace_override}" ]]; then
+    PW_AUTO_WORKSPACE="$(resolve_workspace_root)" bash "${script_dir}/target-first.sh" "$@"
+  else
+    bash "${script_dir}/target-first.sh" "$@"
+  fi
   exit $?
 }
 
@@ -684,11 +763,14 @@ case "${command_name}" in
   help|--help|-h) write_help "$@" ;;
   doctor) doctor ;;
   open) open_cmd "$@" ;;
+  goto) goto_cmd "$@" ;;
+  reload) reload_cmd "$@" ;;
   snapshot) snapshot_cmd "$@" ;;
   screenshot) screenshot_cmd "$@" ;;
   trace-start) trace_start_cmd "$@" ;;
   trace-stop) trace_stop_cmd "$@" ;;
   cookie) cookie_cmd "$@" ;;
+  target-first) target_first_cmd "$@" ;;
   sessions) sessions_cmd ;;
   recover) recover_cmd "$@" ;;
   cleanup) cleanup_cmd "$@" ;;

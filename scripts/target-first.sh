@@ -71,6 +71,17 @@ invoke_wrapper_capture() {
   return ${code}
 }
 
+is_selector_not_unique() {
+  local output="$1"
+  grep -Eiq 'strict mode violation|resolved to [0-9]+ elements|locator.*matched|matched [0-9]+ elements|matches [0-9]+ elements' <<<"${output}"
+}
+
+show_selector_not_unique_diagnostic() {
+  local target="$1"
+  printf '%s\n' "[pw-auto] automation-failure=selector-not-unique target=${target}"
+  printf '%s\n' "[pw-auto] suggestion=add a container scope, use an exact role/label selector, or fall back to a ref from the latest snapshot"
+}
+
 show_help() {
   printf '%s\n' "[pw-auto] usage:"
   printf '%s\n' "[pw-auto]   target-first.sh fill --session <name> --text <value> --target <target> [--target <target> ...] [--submit] [--settle-ms <ms>]"
@@ -114,6 +125,7 @@ case "${command_name}" in
       submit=1
     fi
     last_failure=""
+    selector_not_unique_target=""
     for target in "${targets[@]}"; do
       wrapper_args=(run fill "${target}" "${text}" --session "${session}")
       if [[ ${submit} -eq 1 ]]; then
@@ -131,8 +143,14 @@ case "${command_name}" in
         exit 0
       fi
       last_failure="${output}"
+      if [[ -z "${selector_not_unique_target}" ]] && is_selector_not_unique "${last_failure}"; then
+        selector_not_unique_target="${target}"
+      fi
     done
     printf '%s\n' "[pw-auto] target-first fill failed. None of the provided targets worked for session '${session}'."
+    if [[ -n "${selector_not_unique_target}" ]]; then
+      show_selector_not_unique_diagnostic "${selector_not_unique_target}"
+    fi
     [[ -n "${last_failure}" ]] && printf '%s\n' "${last_failure}"
     exit 1
     ;;
@@ -173,6 +191,7 @@ case "${command_name}" in
       index=$((index + 1))
     done
     last_failure=""
+    selector_not_unique_target=""
     for target in "${targets[@]}"; do
       wrapper_args=(run click "${target}" --session "${session}")
       if [[ -n "${button}" ]]; then
@@ -193,8 +212,14 @@ case "${command_name}" in
         exit 0
       fi
       last_failure="${output}"
+      if [[ -z "${selector_not_unique_target}" ]] && is_selector_not_unique "${last_failure}"; then
+        selector_not_unique_target="${target}"
+      fi
     done
     printf '%s\n' "[pw-auto] target-first click failed. None of the provided targets worked for session '${session}'."
+    if [[ -n "${selector_not_unique_target}" ]]; then
+      show_selector_not_unique_diagnostic "${selector_not_unique_target}"
+    fi
     [[ -n "${last_failure}" ]] && printf '%s\n' "${last_failure}"
     exit 1
     ;;

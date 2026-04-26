@@ -31,6 +31,26 @@ Fix the command by adding one of:
 - `--mode headed`
 - `--mode headless`
 
+## `open` Succeeds But Existing State Disappears
+
+`open` is a create/recreate entrypoint. It can rebuild the page surface for a named session, and that can lose in-memory page state or make earlier state injection look ineffective.
+
+Typical symptom:
+
+- `cookie set` printed success
+- then another `open` ran for the same session
+- `cookie list` returns `count=0`, or the page is back on the login screen
+
+Use this sequence instead:
+
+1. `cookie set ...`
+2. `cookie list ...`
+3. `reload --session <name>` for the same URL, or `goto <url> --session <name>` for another route
+4. `snapshot --session <name>`
+5. verify `/api/auth/session` or an authenticated page element
+
+If the wrapper warns that a session already has metadata, treat a repeated `open` as a state-sensitive action and prefer `goto` or `reload`.
+
 ## `open --maximize` Does Not Maximize The Window
 
 The wrapper-level `--maximize` flag is implemented by generating a temporary
@@ -65,6 +85,22 @@ Checks:
 - confirm the server is issuing an HTTP Basic challenge (`WWW-Authenticate: Basic ...`)
 - do not use these options for form-based login; use normal page interactions or cookie injection instead
 
+## Cookie Injection Succeeds But The Page Is Not Logged In
+
+`cookie set` success means Playwright accepted a cookie into the browser context. It does not prove the application considers the page authenticated.
+
+Check:
+
+- `cookie list --session <name> --url <origin> --redact` returns the expected cookie count and domain/path
+- the app uses the same cookie name that was injected
+- `--url`, `--domain`, and `--path` match the page origin and request path
+- `--secure` is not used for a plain `http://` local URL
+- `sameSite=None` cookies are also `--secure` where the browser requires it
+- after injection, you used `reload` or `goto`, not another `open`
+- `/api/auth/session` or the visible authenticated UI confirms login state
+
+If cookie storage is correct but the page remains on the login screen, inspect `run network` and `run console` before calling it a product bug.
+
 ## `open` Fails With `EPERM` On Windows
 
 There are two common causes:
@@ -96,6 +132,81 @@ If they target the wrong directory:
 - run `doctor` and inspect the printed `workspace=...` line
 - pass `--workspace <path>` explicitly
 - or set `PW_AUTO_WORKSPACE` for the current shell session
+
+## Wrapper Or Helper Path Is Wrong
+
+Prefer the main entrypoint:
+
+- PowerShell: `.\scripts\playwright-automation.ps1 target-first ...`
+- Git Bash: `bash ./scripts/playwright-automation.sh target-first ...`
+
+Direct helper paths still work when needed:
+
+- PowerShell: `.\scripts\target-first.ps1 ...`
+- Git Bash: `bash ./scripts/target-first.sh ...`
+
+If a command fails because `target-first.ps1` was run from the skill root without the `scripts\` prefix, classify that as an automation failure and retry through `playwright-automation target-first`.
+
+## Selector Strict Mode Or Multiple Matches
+
+Playwright strict-mode failures mean the automation selector is ambiguous. Do not count this as a product verification failure.
+
+Typical symptoms:
+
+- `strict mode violation`
+- `resolved to 2 elements`
+- a text selector such as `button:has-text('...')` matches both a list row and a detail card
+
+Fix:
+
+- add a container scope such as `table button.windchill-link-button >> text=Shanghai项目`
+- use exact role or label locators when available
+- re-run `snapshot` and use a ref from the latest snapshot
+
+`target-first` reports this as `automation-failure=selector-not-unique` when the underlying CLI error is recognizable.
+
+## Click Then Immediate Eval Reads Old DOM
+
+React and other SPA frameworks may render asynchronously after a click. A command sequence like click -> immediate `eval` can read the pre-click DOM.
+
+Use one of:
+
+- `playwright-automation target-first click ... --settle-ms 1500`
+- `run run-code "async page => { await page.waitForSelector(...); return ... }"`
+- `run run-code "async page => page.waitForFunction(...)"` for a DOM predicate
+
+Only judge the product after the wait condition, a fresh `snapshot`, or a screenshot confirms the post-action state.
+
+## Hash Route Does Not Re-run App Checks
+
+Setting `window.location.href` or `window.location.hash` to the same hash route may not trigger a route reload or auth/session re-check.
+
+Use:
+
+- `goto <url#route> --session <name>` when the route is changing
+- `reload --session <name>` when the route is the same but cookies or app bootstrap state changed
+
+Then take a fresh `snapshot`.
+
+## `open` Succeeds But Page Content Is Wrong
+
+This is a loaded-page failure class, not necessarily a wrapper failure. `open` and `snapshot` can both succeed while the browser is showing the wrong content.
+
+Common local-dev symptoms:
+
+- a Vite or webpack error overlay
+- a blank SPA shell such as an empty `#app` or `#root`
+- text such as `502`, `503`, `Bad Gateway`, or `ECONNREFUSED`
+- a different application because another process owns the same port
+
+Checks:
+
+- `snapshot --session <name>` and inspect the visible page text
+- `run console --session <name>` for build/runtime errors
+- `run network --session <name>` for failed API or proxy requests
+- verify the exact host and port outside the wrapper when the page content does not match the target app
+
+Keep this classification separate from product UX failure until the expected app route has actually rendered.
 
 ## Git Bash Works Interactively But Fails In An Agent Host
 
