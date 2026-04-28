@@ -208,6 +208,45 @@ Checks:
 
 Keep this classification separate from product UX failure until the expected app route has actually rendered.
 
+## Remote Or Authenticated App Checks Are Misleading
+
+For live remote apps and login-gated apps, automation can be technically healthy while the evidence is pointed at the wrong surface.
+
+Common causes:
+
+- the real app moved to a different port or daemon URL
+- the local checkout is staging, while the live repo and runtime are remote
+- the browser is still on an LDAP/form-login screen
+- unauthenticated HTTP checks return `302` or a login shell
+- a headed/manual flow stalled before the authenticated page rendered
+- a template or SPA runtime error produced a blank or partial page
+
+Checks:
+
+- verify the real host, port, route, and process before opening the browser
+- take a fresh `snapshot` before selecting login fields or buttons
+- prove authentication with cookie listing, an auth endpoint, or a visible logged-in element
+- use `run console` and `run network` when the rendered content is ambiguous
+- pair browser evidence with server-side smoke tests when the app requires authentication that the browser flow cannot reliably establish
+
+Do not treat a login page, `302`, wrong port, blank shell, or stale unauthenticated snapshot as a product regression.
+
+## Eval Or Run-Code Has The Wrong Shape
+
+`run eval` and `run run-code` are passthrough commands to the underlying Playwright CLI. They do not all accept the same function signature.
+
+Use documented shapes:
+
+```text
+playwright-automation run eval "() => document.title" --session local-a1-headless
+playwright-automation run eval "(element) => element.textContent" "button.submit" --session local-a1-headless
+playwright-automation run run-code "async page => page.url()" --session local-a1-headless
+```
+
+For `eval`, use `() => ...` for page-level reads and `(element) => ...` when you also pass a target selector or latest snapshot ref. For `run-code`, use a single positional `page` argument.
+
+If a command fails with an error like `Cannot destructure property 'page' of 'undefined'`, the JavaScript shape is wrong for that CLI command. Retry with the documented form instead of debugging the product page.
+
 ## Git Bash Works Interactively But Fails In An Agent Host
 
 If `bash --version` works in your normal Git Bash terminal but the same command fails when launched by an agent host, the problem is usually the host restriction, not the wrapper script.

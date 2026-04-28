@@ -63,6 +63,20 @@ function Has-Flag {
     return $false
 }
 
+function Has-OptionToken {
+    param(
+        [string[]]$Tokens,
+        [string]$Name
+    )
+
+    foreach ($token in $Tokens) {
+        if ($token -eq $Name -or $token.StartsWith("$Name=")) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Invoke-WrapperCapture {
     param(
         [string[]]$WrapperArguments
@@ -102,7 +116,7 @@ function Show-Help {
         "[pw-auto] notes:",
         "[pw-auto]   order targets as stable selectors first and snapshot refs last",
         "[pw-auto]   fill and click stop on the first successful target",
-        "[pw-auto]   --settle-ms runs wrapper settle logic via eval after success"
+        "[pw-auto]   --settle-ms must be a non-negative integer and runs wrapper settle logic via eval after success"
     ) | ForEach-Object { Write-Output $_ }
     exit 0
 }
@@ -128,6 +142,12 @@ if (-not $targets -or $targets.Length -eq 0) {
 }
 
 $settleMs = Get-OptionValue -Tokens $tokens -Name "--settle-ms"
+if ((Has-OptionToken -Tokens $tokens -Name "--settle-ms") -and ((-not $settleMs) -or $settleMs.StartsWith("--"))) {
+    Fail "missing value for --settle-ms."
+}
+if ($settleMs -and $settleMs -notmatch '^[0-9]+$') {
+    Fail "--settle-ms must be a non-negative integer number of milliseconds."
+}
 
 switch ($command) {
     "fill" {

@@ -13,6 +13,19 @@ Use this file when the basic loop in `SKILL.md` is not enough.
 
 `open` is the browser-page create/recreate entrypoint. Once a session exists, prefer `goto` and `reload` so injected cookies, local storage, and current tab state are not lost unexpectedly.
 
+## Remote Or Authenticated Apps
+
+Use this short preflight before automating a live remote app, an LDAP/form-login app, or any app where the local checkout may not be the running surface.
+
+1. Confirm the authoritative URL, host, port, and route outside the wrapper first. Do not infer the target from an old dev-server port or a staging checkout.
+2. Open exactly that URL with one named session and explicit mode.
+3. Run `snapshot` before choosing selectors. Do not fill a login card from guessed selectors.
+4. Verify whether the browser is unauthenticated, form-authenticated, cookie-authenticated, or behind HTTP Basic Auth before running UI checks.
+5. After login or cookie injection, use `reload` or `goto`, then `snapshot`, then an app-state check such as `/api/auth/session` or a visible authenticated element.
+6. If the page content is unexpected, inspect the loaded page, console, network, and exact origin before treating it as a product bug.
+
+For remote apps such as a daemonized SPA or a Django portal, the browser result is only meaningful after the real running URL and login state have been proven. A successful `open` plus a login screen, 302, error overlay, blank shell, or wrong port is not yet product verification.
+
 ## Why One Agent Maps To One Session
 
 The skill assumes one agent owns one session.
@@ -94,7 +107,7 @@ playwright-automation target-first click --session local-a1-headless --target "t
 Wait for a selector:
 
 ```text
-playwright-automation run run-code "async page => { await page.waitForSelector('.flush-panel', { timeout: 5000 }); return document.querySelectorAll('.flush-panel').length; }" --session local-a1-headless
+playwright-automation run run-code "async page => { await page.waitForSelector('.flush-panel', { timeout: 5000 }); return await page.locator('.flush-panel').count(); }" --session local-a1-headless
 ```
 
 Wait for text:
@@ -161,7 +174,21 @@ Treat a product verification failure as valid only after the automation has:
 ## Data Extraction
 
 Use `snapshot` first and prefer standard commands.
-Use `run eval ...` only when the CLI does not already expose the needed behavior.
+Use `run eval ...` or `run run-code ...` only when the CLI does not already expose the needed behavior.
+
+Keep inline JavaScript small. Long one-shot strings are brittle in PowerShell and harder to diagnose than a selector command, a wait template, or a short probe.
+
+Use the CLI's accepted shapes:
+
+```text
+playwright-automation run eval "() => document.title" --session local-a1-headless
+playwright-automation run eval "(element) => element.textContent" "button.submit" --session local-a1-headless
+playwright-automation run run-code "async page => ({ url: page.url(), title: await page.title() })" --session local-a1-headless
+```
+
+Use `eval` for small page or element expressions; when a target is provided, the function receives that element as its single argument. Use `run-code` when you need the Playwright `page` object, waits, requests, or multiple operations.
+
+Do not use object-destructuring forms such as `({ page }) => ...` unless the underlying CLI command explicitly documents that shape for the command you are invoking.
 
 ## Parallel Work
 

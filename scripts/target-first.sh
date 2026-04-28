@@ -61,6 +61,18 @@ has_flag() {
   return 1
 }
 
+has_option_token() {
+  local name="$1"
+  shift
+  local token
+  for token in "$@"; do
+    if [[ "${token}" == "${name}" || "${token}" == "${name}="* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 invoke_wrapper_capture() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,7 +101,7 @@ show_help() {
   printf '%s\n' "[pw-auto] notes:"
   printf '%s\n' "[pw-auto]   order targets as stable selectors first and snapshot refs last"
   printf '%s\n' "[pw-auto]   fill and click stop on the first successful target"
-  printf '%s\n' "[pw-auto]   --settle-ms runs wrapper settle logic via eval after success"
+  printf '%s\n' "[pw-auto]   --settle-ms must be a non-negative integer and runs wrapper settle logic via eval after success"
   exit 0
 }
 
@@ -114,6 +126,12 @@ done < <(get_option_values --target "$@")
 [[ ${#targets[@]} -gt 0 ]] || fail "missing required --target <target>."
 
 settle_ms="$(get_option_value --settle-ms "$@" || true)"
+if has_option_token --settle-ms "$@" && { [[ -z "${settle_ms}" ]] || [[ "${settle_ms}" == --* ]]; }; then
+  fail "missing value for --settle-ms."
+fi
+if [[ -n "${settle_ms}" && ! "${settle_ms}" =~ ^[0-9]+$ ]]; then
+  fail "--settle-ms must be a non-negative integer number of milliseconds."
+fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "${command_name}" in

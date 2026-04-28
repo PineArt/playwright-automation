@@ -193,7 +193,7 @@ function Write-Help {
                 "[pw-auto] usage: playwright-automation [--workspace <path>] run|cli|raw [--session <name>] <playwright-cli subcommand> [args]",
                 "[pw-auto] description: pass a command through to playwright-cli after wrapper environment setup",
                 "[pw-auto] notes:",
-                "[pw-auto]   use this for click, fill, press, console, network, eval, and similar commands",
+                "[pw-auto]   use this for click, fill, press, console, network, eval, run-code, and similar commands",
                 "[pw-auto]   if --session is present, the wrapper prefixes it before forwarding"
             )
         }
@@ -202,7 +202,7 @@ function Write-Help {
                 "[pw-auto] usage: playwright-automation [--workspace <path>] run|cli|raw [--session <name>] <playwright-cli subcommand> [args]",
                 "[pw-auto] description: pass a command through to playwright-cli after wrapper environment setup",
                 "[pw-auto] notes:",
-                "[pw-auto]   use this for click, fill, press, console, network, eval, and similar commands",
+                "[pw-auto]   use this for click, fill, press, console, network, eval, run-code, and similar commands",
                 "[pw-auto]   if --session is present, the wrapper prefixes it before forwarding"
             )
         }
@@ -211,7 +211,7 @@ function Write-Help {
                 "[pw-auto] usage: playwright-automation [--workspace <path>] run|cli|raw [--session <name>] <playwright-cli subcommand> [args]",
                 "[pw-auto] description: pass a command through to playwright-cli after wrapper environment setup",
                 "[pw-auto] notes:",
-                "[pw-auto]   use this for click, fill, press, console, network, eval, and similar commands",
+                "[pw-auto]   use this for click, fill, press, console, network, eval, run-code, and similar commands",
                 "[pw-auto]   if --session is present, the wrapper prefixes it before forwarding"
             )
         }

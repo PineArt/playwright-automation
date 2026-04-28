@@ -17,6 +17,8 @@ Treat `headed` and `headless` as peer modes. Do not open a browser without an ex
 - Re-snapshot after navigation, modals, tab changes, or any major DOM update.
 - Store artifacts under `output/playwright/<session>/`.
 - Prefer `doctor` before blaming the page or the wrapper.
+- For remote or authenticated apps, confirm the real URL, port, route, running process, and login state before treating browser evidence as product evidence.
+- Keep `eval` / `run-code` small and use the documented CLI shape; prefer selectors, waits, `target-first`, `reload`, and `goto` when they cover the need.
 - Use `recover` conservatively. Do not kill sessions unless you explicitly choose a destructive flag.
 - In hosts that support persisted approval rules, prefer a narrowly scoped persistent approval for repeated wrapper commands instead of re-requesting one-off approval every time.
 - Keep persisted approval scope tight. Approve the concrete wrapper or browser helper prefix you need, not a broad shell prefix that would allow unrelated commands.
@@ -95,7 +97,7 @@ Use these wrapper commands:
 - `run ...` for passthrough to `playwright-cli` after the wrapper has set environment defaults
 - `cli ...` and `raw ...` as explicit passthrough aliases for `run ...`
 
-Use `run` for commands such as `click`, `fill`, `press`, `eval`, `console`, or `network` when there is no dedicated wrapper alias.
+Use `run` for commands such as `click`, `fill`, `press`, `eval`, `run-code`, `console`, or `network` when there is no dedicated wrapper alias.
 Use `open` only to create or intentionally recreate a browser page. It can reset page-level in-memory state; after injecting cookies or storage into an existing session, use `reload` or `goto`, not another `open`.
 Use `goto` to navigate an existing session without reopening it. Use `reload` when the current URL, hash route, or newly injected cookie should be re-read by the app.
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
@@ -106,14 +108,15 @@ Use `cookie` for login-state injection during local UI verification. Always prov
 ## Workflow
 
 1. Run `doctor`.
-2. Open with explicit mode and named session.
-3. Snapshot to get current refs.
-4. Interact. Prefer stable selectors first and refs from the latest snapshot second.
-5. For submit-oriented or SPA flows, prefer `fill --submit`, `press Enter`, or `target-first ... --settle-ms`; do not treat a click followed by an immediate `eval` as a failure conclusion.
-6. Snapshot again after state changes.
-7. Capture artifacts when the step matters.
-8. If a command fails, inspect the error prefix. Wrapper path, session setup, selector ambiguity, and strict-mode errors are automation failures, not product failures.
-9. If the same permission prompt keeps recurring, prefer a persisted approval for that specific wrapper command family before continuing the loop.
+2. For remote/authenticated apps, verify the target URL, port, route, process, and expected auth path before opening the browser.
+3. Open with explicit mode and named session.
+4. Snapshot to get current refs.
+5. Interact. Prefer stable selectors first and refs from the latest snapshot second.
+6. For submit-oriented or SPA flows, prefer `fill --submit`, `press Enter`, or `target-first ... --settle-ms`; do not treat a click followed by an immediate `eval` as a failure conclusion.
+7. Snapshot again after state changes.
+8. Capture artifacts when the step matters.
+9. If a command fails, inspect the error prefix. Wrapper path, session setup, selector ambiguity, strict-mode errors, unauthenticated pages, and wrong loaded origins are automation or setup failures, not product failures.
+10. If the same permission prompt keeps recurring, prefer a persisted approval for that specific wrapper command family before continuing the loop.
 
 ## Guardrails
 
