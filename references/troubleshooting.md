@@ -101,6 +101,21 @@ Check:
 
 If cookie storage is correct but the page remains on the login screen, inspect `run network` and `run console` before calling it a product bug.
 
+## State Load Succeeds But The Page Is Not Logged In
+
+`state load` restores browser-side storage into the Playwright context. It can include cookies, localStorage, and sessionStorage, but it does not prove the server still accepts that state.
+
+Check:
+
+- the state file was saved after the app was visibly authenticated, not before login completed
+- the state file was loaded into the expected named session
+- after `state load`, you used `reload` or `goto`, not another unauthenticated flow
+- the loaded page origin matches the origin stored in the state file
+- the app has not expired or revoked the server-side session
+- `/api/auth/session` or a visible authenticated UI confirms login state
+
+If the state file is stale, repeat the manual-first login flow in headed mode and save a fresh state file. Do not treat localStorage or cookie presence by itself as an authenticated product state.
+
 ## `open` Fails With `EPERM` On Windows
 
 There are two common causes:

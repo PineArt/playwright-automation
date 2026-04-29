@@ -8,7 +8,7 @@ $script:PwAutoScriptDir = $PSScriptRoot
 $script:PwAutoWorkspaceOverride = ""
 
 function Fail([string]$Message, [int]$Code = 1) {
-    Write-Error "[pw-auto] $Message"
+    [Console]::Error.WriteLine("[pw-auto] $Message")
     exit $Code
 }
 
@@ -32,6 +32,7 @@ function Write-Help {
                 "[pw-auto]   trace-start  start Playwright tracing for a session",
                 "[pw-auto]   trace-stop   stop Playwright tracing for a session",
                 "[pw-auto]   cookie       set, list, or clear cookies without echoing values",
+                "[pw-auto]   state        save or load browser authentication state",
                 "[pw-auto]   target-first selector-first, ref-fallback fill/click helper",
                 "[pw-auto]   sessions     list active Playwright CLI sessions",
                 "[pw-auto]   recover      attempt non-destructive recovery for one session",
@@ -160,6 +161,20 @@ function Write-Help {
                 "[pw-auto] notes:",
                 "[pw-auto]   order targets as scoped stable selectors first and latest snapshot refs last",
                 "[pw-auto]   if a selector is ambiguous, add a container scope, exact role/label, or latest snapshot ref"
+            )
+        }
+        "state" {
+            $lines = @(
+                "[pw-auto] usage: playwright-automation [--workspace <path>] state <save|load> --session <name> [--file <path>]",
+                "[pw-auto] description: save or load browser storage state for manual-first login reuse",
+                "[pw-auto] commands:",
+                "[pw-auto]   state save --session <name> [--file <path>]",
+                "[pw-auto]   state load --session <name> --file <path>",
+                "[pw-auto] notes:",
+                "[pw-auto]   save only after confirming the app is authenticated",
+                "[pw-auto]   default save path is output/playwright/<session>/storage-state-<timestamp>.json",
+                "[pw-auto]   state files contain cookies and tokens; delete or rotate them after use",
+                "[pw-auto]   load restores browser state only; run reload/goto, snapshot, and an app-specific auth probe before product checks"
             )
         }
         "sessions" {
@@ -345,6 +360,33 @@ function Ensure-SessionOption {
         Fail "missing required --session <name>."
     }
     return $session
+}
+
+function ConvertTo-SafePathSegment {
+    param(
+        [string]$Value
+    )
+
+    $safe = $Value -replace '[^A-Za-z0-9._-]', '_'
+    if (-not $safe) {
+        return "session"
+    }
+    return $safe
+}
+
+function Resolve-WorkspaceFilePath {
+    param(
+        [hashtable]$Paths,
+        [string]$FileValue
+    )
+
+    if (-not $FileValue) {
+        return ""
+    }
+    if ([System.IO.Path]::IsPathRooted($FileValue)) {
+        return $FileValue
+    }
+    return (Join-Path $Paths.WorkspaceRoot $FileValue)
 }
 
 function Build-CommonEnv {
@@ -770,6 +812,68 @@ function Invoke-Cookie {
     exit $exitCode
 }
 
+function Invoke-State {
+    param(
+        [string[]]$Tokens
+    )
+    if ($Tokens.Length -lt 1) {
+        Fail "state requires save or load."
+    }
+
+    $operation = $Tokens[0]
+    $rest = @()
+    if ($Tokens.Length -gt 1) {
+        $rest = $Tokens[1..($Tokens.Length - 1)]
+    }
+    $session = Ensure-SessionOption -Tokens $rest
+    $paths = Build-CommonEnv
+    $fileValue = Get-OptionValue -Tokens $rest -Name "--file"
+
+    if ($operation -eq "save") {
+        if ($fileValue) {
+            $stateFile = Resolve-WorkspaceFilePath -Paths $paths -FileValue $fileValue
+            $stateDir = Split-Path -Parent $stateFile
+            if ($stateDir) {
+                New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+            }
+        } else {
+            $safeSession = ConvertTo-SafePathSegment -Value $session
+            $stateDir = Join-Path $paths.OutputRoot $safeSession
+            New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+            $stateFile = Join-Path $stateDir ("storage-state-{0}.json" -f (New-Timestamp))
+        }
+
+        [Console]::Error.WriteLine("[pw-auto] warning: state file contains credentials. Delete or rotate after use: $stateFile")
+        $cli = Build-CliPrefix
+        $cli += @("--session", $session, "state-save", $stateFile)
+        & (Resolve-Npx) @cli
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -eq 0) {
+            Write-Output "[pw-auto] state=$stateFile"
+        }
+        exit $exitCode
+    }
+
+    if ($operation -eq "load") {
+        if (-not $fileValue) {
+            Fail "state load requires --file <path>."
+        }
+        $stateFile = Resolve-WorkspaceFilePath -Paths $paths -FileValue $fileValue
+        if (-not (Test-Path -LiteralPath $stateFile -PathType Leaf)) {
+            Fail "state file '$fileValue' does not exist."
+        }
+
+        [Console]::Error.WriteLine("[pw-auto] warning: state load restores browser state only. Run reload/goto, snapshot, and an app-specific auth probe before product checks.")
+        $cli = Build-CliPrefix
+        $cli += @("--session", $session, "state-load", $stateFile)
+        & (Resolve-Npx) @cli
+        $exitCode = $LASTEXITCODE
+        exit $exitCode
+    }
+
+    Fail "unknown state command '$operation'. Use save or load."
+}
+
 function Invoke-TargetFirst {
     param(
         [string[]]$Tokens
@@ -915,6 +1019,7 @@ switch ($command) {
     "trace-start" { Invoke-TraceStart -Tokens $restArgs }
     "trace-stop" { Invoke-TraceStop -Tokens $restArgs }
     "cookie" { Invoke-Cookie -Tokens $restArgs }
+    "state" { Invoke-State -Tokens $restArgs }
     "target-first" { Invoke-TargetFirst -Tokens $restArgs }
     "sessions" { Invoke-Sessions }
     "recover" { Invoke-Recover -Tokens $restArgs }

@@ -22,6 +22,7 @@ write_help() {
 [pw-auto]   trace-start  start Playwright tracing for a session
 [pw-auto]   trace-stop   stop Playwright tracing for a session
 [pw-auto]   cookie       set, list, or clear cookies without echoing values
+[pw-auto]   state        save or load browser authentication state
 [pw-auto]   target-first selector-first, ref-fallback fill/click helper
 [pw-auto]   sessions     list active Playwright CLI sessions
 [pw-auto]   recover      attempt non-destructive recovery for one session
@@ -150,6 +151,20 @@ EOF
 [pw-auto] notes:
 [pw-auto]   order targets as scoped stable selectors first and latest snapshot refs last
 [pw-auto]   if a selector is ambiguous, add a container scope, exact role/label, or latest snapshot ref
+EOF
+      ;;
+    "state")
+      cat <<'EOF'
+[pw-auto] usage: playwright-automation [--workspace <path>] state <save|load> --session <name> [--file <path>]
+[pw-auto] description: save or load browser storage state for manual-first login reuse
+[pw-auto] commands:
+[pw-auto]   state save --session <name> [--file <path>]
+[pw-auto]   state load --session <name> --file <path>
+[pw-auto] notes:
+[pw-auto]   save only after confirming the app is authenticated
+[pw-auto]   default save path is output/playwright/<session>/storage-state-<timestamp>.json
+[pw-auto]   state files contain cookies and tokens; delete or rotate them after use
+[pw-auto]   load restores browser state only; run reload/goto, snapshot, and an app-specific auth probe before product checks
 EOF
       ;;
     "sessions")
@@ -288,6 +303,17 @@ require_session() {
   printf '%s\n' "${session}"
 }
 
+safe_path_segment() {
+  local value="$1"
+  local safe
+  safe="$(printf '%s' "${value}" | tr -c 'A-Za-z0-9._-' '_')"
+  if [[ -z "${safe}" ]]; then
+    printf '%s\n' "session"
+  else
+    printf '%s\n' "${safe}"
+  fi
+}
+
 forward_tokens() {
   local -n out_ref=$1
   shift
@@ -415,6 +441,15 @@ resolve_config_path() {
     printf '%s\n' "${config_value}"
   else
     printf '%s\n' "${root}/${config_value}"
+  fi
+}
+
+resolve_workspace_file_path() {
+  local file_value="$1"
+  if [[ "${file_value}" =~ ^[A-Za-z]:[\\/].* ]] || [[ "${file_value}" == /* ]]; then
+    printf '%s\n' "${file_value}"
+  else
+    printf '%s\n' "${workspace_root}/${file_value}"
   fi
 }
 
@@ -649,6 +684,55 @@ cookie_cmd() {
   exit $?
 }
 
+state_cmd() {
+  [[ $# -ge 1 ]] || fail "state requires save or load."
+  local operation="$1"
+  shift
+  build_common_env
+  ensure_npx
+  local session
+  session="$(require_session "$@")"
+  local file_value=""
+  file_value="$(get_option_value --file "$@" || true)"
+
+  case "${operation}" in
+    save)
+      local state_file=""
+      if [[ -n "${file_value}" ]]; then
+        state_file="$(resolve_workspace_file_path "${file_value}")"
+        mkdir -p "$(dirname "${state_file}")"
+      else
+        local safe_session
+        safe_session="$(safe_path_segment "${session}")"
+        local state_dir="${output_root}/${safe_session}"
+        mkdir -p "${state_dir}"
+        state_file="${state_dir}/storage-state-$(timestamp).json"
+      fi
+
+      printf '%s\n' "[pw-auto] warning: state file contains credentials. Delete or rotate after use: ${state_file}" >&2
+      "${npx_cmd}" "${cli_prefix[@]}" --session "${session}" state-save "${state_file}"
+      local code=$?
+      if [[ ${code} -eq 0 ]]; then
+        printf '%s\n' "[pw-auto] state=${state_file}"
+      fi
+      exit ${code}
+      ;;
+    load)
+      [[ -n "${file_value}" ]] || fail "state load requires --file <path>."
+      local state_file
+      state_file="$(resolve_workspace_file_path "${file_value}")"
+      [[ -f "${state_file}" ]] || fail "state file '${file_value}' does not exist."
+
+      printf '%s\n' "[pw-auto] warning: state load restores browser state only. Run reload/goto, snapshot, and an app-specific auth probe before product checks." >&2
+      "${npx_cmd}" "${cli_prefix[@]}" --session "${session}" state-load "${state_file}"
+      exit $?
+      ;;
+    *)
+      fail "unknown state command '${operation}'. Use save or load."
+      ;;
+  esac
+}
+
 target_first_cmd() {
   if [[ -n "${pw_auto_workspace_override}" ]]; then
     PW_AUTO_WORKSPACE="$(resolve_workspace_root)" bash "${script_dir}/target-first.sh" "$@"
@@ -770,6 +854,7 @@ case "${command_name}" in
   trace-start) trace_start_cmd "$@" ;;
   trace-stop) trace_stop_cmd "$@" ;;
   cookie) cookie_cmd "$@" ;;
+  state) state_cmd "$@" ;;
   target-first) target_first_cmd "$@" ;;
   sessions) sessions_cmd ;;
   recover) recover_cmd "$@" ;;

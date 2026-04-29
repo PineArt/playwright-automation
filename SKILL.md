@@ -87,6 +87,8 @@ Use these wrapper commands:
 - `trace-start --session <name>`
 - `trace-stop --session <name>`
 - `target-first <fill|click> ...` for selector-first, ref-fallback interactions
+- `state save --session <name> [--file <path>]`
+- `state load --session <name> --file <path>`
 - `cookie set --session <name> --url <url> --name <cookie_name> --value-env <ENV_NAME> [--path /] [--domain <domain>] [--same-site Strict|Lax|None] [--secure] [--http-only]`
 - `cookie set --session <name> --url <url> --name <cookie_name> --value-file <path> [same options]`
 - `cookie list --session <name> --url <url> [--redact|--show-values]`
@@ -103,6 +105,7 @@ Use `goto` to navigate an existing session without reopening it. Use `reload` wh
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
 Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last. Prefer scoped selectors such as `table button.some-row-action`, exact role/label selectors when available, and refs from the latest snapshot when text selectors are ambiguous.
 Use `open` HTTP credential options for browser Basic Auth challenges. Prefer `--http-username-env` with `--http-password-env`, or `--http-credentials-file` with JSON `{"username":"...","password":"..."}`. Raw credential values are intentionally unsupported, and wrapper output redacts credentials.
+Use `state` for manual-first login reuse. Open a headed session, let the human enter credentials directly in the browser, confirm the app is authenticated, then `state save`. Later, open or reuse a named session, `state load`, `reload` or `goto`, `snapshot`, and verify an app-specific authenticated state. State files contain cookies and tokens; keep them under ignored workspace output by default and delete or rotate them after use.
 Use `cookie` for login-state injection during local UI verification. Always provide `--session` and `--url`; the wrapper does not infer origin or domain. Prefer `--value-env` or `--value-file` for secrets. Cookie values are redacted by default and are only shown by `cookie list` when `--show-values` is explicitly provided. `cookie set` success only proves the browser context accepted the cookie; verify with `cookie list`, `reload` or `goto`, `snapshot`, and an app-level authenticated state check such as `/api/auth/session` or visible page state.
 
 ## Workflow
@@ -129,6 +132,8 @@ Use `cookie` for login-state injection during local UI verification. Always prov
 - Do not default to snapshot refs when you already have a stable unique selector; keep refs as the fallback.
 - Do not put Basic Auth passwords on the command line. Use the `open` HTTP credential env/file options so credentials are not echoed in output.
 - Do not use `run eval` with `document.cookie` for login-state injection. Use the `cookie` command so HttpOnly cookies work and values are not echoed in command output.
+- Do not treat `state load` as proof of application authentication. It restores browser-side cookies and storage only; the server session can still be expired or invalid.
+- Do not commit state files. They can contain live credentials, cookies, localStorage tokens, and sessionStorage values.
 - Do not assume the current environment can spawn browsers. In restricted sandboxes, `doctor` may report permission failures that require escalation or a different environment.
 - Do not persist an approval that is broader than the repeated action requires. Wrapper-specific approval is preferred over approving a general shell interpreter.
 

@@ -24,6 +24,8 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 reload --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 snapshot --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 screenshot --session gallery-a1-headed --name home
+& .\scripts\playwright-automation.ps1 state save --session gallery-a1-headed
+& .\scripts\playwright-automation.ps1 state load --session gallery-a1-headed --file .\output\playwright\gallery-a1-headed\storage-state-20260429-120000.json
 & .\scripts\playwright-automation.ps1 cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
 & .\scripts\playwright-automation.ps1 cookie list --session gallery-a1-headed --url http://127.0.0.1:5173 --redact
 & .\scripts\playwright-automation.ps1 cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
@@ -59,6 +61,8 @@ bash ./scripts/playwright-automation.sh goto http://127.0.0.1:5173/#/dashboard -
 bash ./scripts/playwright-automation.sh reload --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh snapshot --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh screenshot --session gallery-a1-headed --name home
+bash ./scripts/playwright-automation.sh state save --session gallery-a1-headed
+bash ./scripts/playwright-automation.sh state load --session gallery-a1-headed --file ./output/playwright/gallery-a1-headed/storage-state-20260429-120000.json
 export TEST_COOKIE
 bash ./scripts/playwright-automation.sh cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
 bash ./scripts/playwright-automation.sh cookie list --session gallery-a1-headed --url http://127.0.0.1:5173 --redact
@@ -86,4 +90,5 @@ Both shells should preserve:
 - the same artifact path convention
 - the same `[pw-auto]` error prefix
 - Basic Auth credentials are redacted and should come from env vars or a JSON credentials file
+- state files may contain cookies and tokens; keep them out of git and delete or rotate them after use
 - cookie values are redacted unless `cookie list --show-values` is explicitly requested

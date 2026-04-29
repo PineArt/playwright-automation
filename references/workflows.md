@@ -21,10 +21,47 @@ Use this short preflight before automating a live remote app, an LDAP/form-login
 2. Open exactly that URL with one named session and explicit mode.
 3. Run `snapshot` before choosing selectors. Do not fill a login card from guessed selectors.
 4. Verify whether the browser is unauthenticated, form-authenticated, cookie-authenticated, or behind HTTP Basic Auth before running UI checks.
-5. After login or cookie injection, use `reload` or `goto`, then `snapshot`, then an app-state check such as `/api/auth/session` or a visible authenticated element.
-6. If the page content is unexpected, inspect the loaded page, console, network, and exact origin before treating it as a product bug.
+5. Prefer the manual-first login flow for real accounts: open headed, let the human complete login in the browser, wait for the human to say login is complete, then verify app authentication before saving state.
+6. After manual login, state load, or cookie injection, use `reload` or `goto`, then `snapshot`, then an app-state check such as `/api/auth/session` or a visible authenticated element.
+7. If the page content is unexpected, inspect the loaded page, console, network, and exact origin before treating it as a product bug.
 
 For remote apps such as a daemonized SPA or a Django portal, the browser result is only meaningful after the real running URL and login state have been proven. A successful `open` plus a login screen, 302, error overlay, blank shell, or wrong port is not yet product verification.
+
+## Manual-First Login Reuse
+
+Use this as the default authenticated workflow for real accounts, SSO, MFA, CAPTCHA, or any app where credentials should not pass through agent commands.
+
+### Same Live Session
+
+1. Open a headed session: `playwright-automation open <url> --session <name> --mode headed`.
+2. The human enters credentials directly in the browser and completes any MFA, SSO, or CAPTCHA.
+3. The human tells the agent that login is complete.
+4. The agent runs `snapshot` and an app-specific auth probe, such as `/api/auth/session` or a visible authenticated element.
+5. Continue in the same named session with `goto` or `reload`; do not call `open` again unless you intentionally recreate the page surface.
+
+This path only works while the Playwright session remains alive. If the browser, daemon, or machine restarts, use the saved-state path below.
+
+### Saved State Across Runs
+
+After the same live session is authenticated and verified:
+
+```text
+playwright-automation state save --session local-a1-headed
+```
+
+The wrapper prints the state file path. The file can contain cookies, localStorage tokens, and sessionStorage values. It is stored under ignored `output/playwright/<session>/` by default, but it is still a credential file; delete or rotate it after use.
+
+To reuse it later:
+
+```text
+playwright-automation open <url> --session local-a1-headed --mode headed
+playwright-automation state load --session local-a1-headed --file output/playwright/local-a1-headed/storage-state-20260429-120000.json
+playwright-automation reload --session local-a1-headed
+playwright-automation snapshot --session local-a1-headed
+playwright-automation run run-code "async page => ({ status: (await (await page.request.get('<auth-session-url>')).status()), url: page.url(), title: await page.title() })" --session local-a1-headed
+```
+
+`state load` success only proves the browser context accepted stored state. Server-side sessions can expire, be revoked, or require fresh CSRF flows. Always run `reload` or `goto`, then `snapshot`, then an app-specific auth probe before product checks.
 
 ## Why One Agent Maps To One Session
 
