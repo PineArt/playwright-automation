@@ -18,6 +18,7 @@ Treat `headed` and `headless` as peer modes. Do not open a browser without an ex
 - Store artifacts under `output/playwright/<session>/`.
 - Prefer `doctor` before blaming the page or the wrapper.
 - For remote or authenticated apps, confirm the real URL, port, route, running process, and login state before treating browser evidence as product evidence.
+- When authenticated browser evidence is required and the current browser session is unauthenticated, ask the human to complete a headed manual login before recording a browser-auth gap. Record the gap only if headed login is unavailable, the human cannot complete it, or the post-login auth probe still fails.
 - Keep `eval` / `run-code` small and use the documented CLI shape; prefer selectors, waits, `target-first`, `reload`, and `goto` when they cover the need.
 - Use `recover` conservatively. Do not kill sessions unless you explicitly choose a destructive flag.
 - In hosts that support persisted approval rules, prefer a narrowly scoped persistent approval for repeated wrapper commands instead of re-requesting one-off approval every time.

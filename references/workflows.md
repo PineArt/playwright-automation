@@ -21,11 +21,13 @@ Use this short preflight before automating a live remote app, an LDAP/form-login
 2. Open exactly that URL with one named session and explicit mode.
 3. Run `snapshot` before choosing selectors. Do not fill a login card from guessed selectors.
 4. Verify whether the browser is unauthenticated, form-authenticated, cookie-authenticated, or behind HTTP Basic Auth before running UI checks.
-5. Prefer the manual-first login flow for real accounts: open headed, let the human complete login in the browser, wait for the human to say login is complete, then verify app authentication before saving state.
+5. If authenticated browser evidence is required and the browser is unauthenticated, run the manual-first login flow before falling back to non-browser evidence or recording a browser-auth gap.
 6. After manual login, state load, or cookie injection, use `reload` or `goto`, then `snapshot`, then an app-state check such as `/api/auth/session` or a visible authenticated element.
 7. If the page content is unexpected, inspect the loaded page, console, network, and exact origin before treating it as a product bug.
 
 For remote apps such as a daemonized SPA or a Django portal, the browser result is only meaningful after the real running URL and login state have been proven. A successful `open` plus a login screen, 302, error overlay, blank shell, or wrong port is not yet product verification.
+
+Only record a browser-auth gap after one of these has happened: headed login is unavailable in the current environment, the human cannot complete login, the human has not signaled that login is complete, or the post-login auth probe still fails. Otherwise, ask the human to complete login first.
 
 ## Manual-First Login Reuse
 
