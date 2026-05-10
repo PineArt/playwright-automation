@@ -177,6 +177,7 @@ function Write-Help {
                 "[pw-auto]   network can optionally trigger one action after listeners attach: reload, goto, click, or select",
                 "[pw-auto]   network patterns are substrings unless --regex is set; response bodies are omitted unless --include-bodies is set",
                 "[pw-auto]   wait-option checks native select option elements or [role=option] descendants and writes a timeout artifact before exiting non-zero",
+                "[pw-auto]   wait-option --match-text is only valid with --value; --non-empty checks option values",
                 "[pw-auto]   style reads resolved getComputedStyle values and writes count/elements JSON"
             )
         }

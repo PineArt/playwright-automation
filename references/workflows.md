@@ -202,7 +202,7 @@ Capture a short network window, optionally triggering one action after listeners
 playwright-automation probe network --session local-a1-headless --name warranty-trend --duration-ms 6000 --until-quiet-ms 1500 --include "/api/warranty/repair-rate/trend" --reload
 ```
 
-`probe network` starts at command invocation, not at page load. Duplicate request keys are `method + full URL`. `--include` and `--exclude` use substring matching unless `--regex` is set. Response bodies are omitted by default; use `--include-bodies` only when the body is required and safe to store in the artifact. Supported triggers are `--reload`, `--goto <url>`, `--click <selector>`, and `--select <selector> --value <value>`.
+`probe network` starts at command invocation, not at page load. Duplicate request keys are `method + full URL`. `--include` and `--exclude` use substring matching unless `--regex` is set. Response bodies are omitted by default; use `--include-bodies` only when the body is required and safe to store in the artifact. When bodies are included, each response records `bodyStatus`; `pending` means the body read did not finish inside the probe's body-read grace window. Supported triggers are `--reload`, `--goto <url>`, `--click <selector>`, and `--select <selector> --value <value>`.
 
 Wait for native `<select>` options or `[role=option]` descendants:
 
@@ -210,7 +210,7 @@ Wait for native `<select>` options or `[role=option]` descendants:
 playwright-automation probe wait-option --session local-a1-headless --selector '[data-testid="warranty-repair-rate-trend-left"] select' --non-empty --timeout-ms 5000
 ```
 
-Use exactly one predicate: `--value <value>`, `--non-empty`, or `--count-at-least <n>`. `--value` matches option `value` exactly by default; add `--match-text` to match visible option text. On timeout the command exits non-zero but still writes the last observed option snapshot.
+Use exactly one predicate: `--value <value>`, `--non-empty`, or `--count-at-least <n>`. `--value` matches option `value` exactly by default; add `--match-text` to match visible option text. `--match-text` is only valid with `--value`; `--non-empty` checks option values. On timeout the command exits non-zero but still writes the last observed option snapshot.
 
 Read computed styles:
 

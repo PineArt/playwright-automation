@@ -210,8 +210,8 @@ Interpretation:
 - `probe network` can also trigger one action after listeners attach. Use `--reload` for same-page bootstrap replays, `--goto` for route changes, or `--click` / `--select` to bind the network capture to a UI interaction.
 - duplicate network keys are `method + full URL`; query-string differences are intentionally distinct.
 - include/exclude patterns are substrings unless `--regex` is set.
-- response bodies are not stored unless `--include-bodies` is set; avoid body capture when secrets may appear.
-- `probe wait-option` does not require option elements to be visible. It checks native `<select>` options or `[role=option]` descendants.
+- response bodies are not stored unless `--include-bodies` is set; avoid body capture when secrets may appear. When bodies are included, each response records `bodyStatus`; `pending` means the read did not finish inside the grace window, so the body is not missing by accident.
+- `probe wait-option` does not require option elements to be visible. It checks native `<select>` options or `[role=option]` descendants. `--non-empty` checks option values, and `--match-text` is only valid with `--value`.
 - a `wait-option` timeout is still useful evidence because the command writes the last observed option snapshot before exiting non-zero.
 
 ## Hash Route Does Not Re-run App Checks

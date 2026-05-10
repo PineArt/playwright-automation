@@ -367,11 +367,14 @@ function buildNetworkCode(input) {
     };
     events.push(item);
     if (input.includeBodies) {
+      item.bodyStatus = "pending";
       const bodyTask = response.text().then(text => {
+        item.bodyStatus = "ok";
         item.bodyLength = text.length;
         item.body = text.length > input.bodyMaxChars ? text.slice(0, input.bodyMaxChars) : text;
         item.bodyTruncated = text.length > input.bodyMaxChars;
       }).catch(error => {
+        item.bodyStatus = "error";
         item.bodyError = error && error.message ? error.message : String(error);
       });
       pendingBodies.push(bodyTask);
@@ -426,9 +429,10 @@ function buildNetworkCode(input) {
     page.off("response", recordResponse);
   }
   if (pendingBodies.length) {
+    const bodyGraceMs = Math.min(Math.max(Math.floor(input.durationMs / 4), 1000), 5000);
     await Promise.race([
       Promise.allSettled(pendingBodies),
-      page.waitForTimeout(1000)
+      page.waitForTimeout(bodyGraceMs)
     ]);
   }
   const requestCounts = {};
@@ -515,7 +519,7 @@ function buildWaitOptionCode(input) {
   }, input);
   const matches = snapshot => {
     if (input.predicate === "non-empty")
-      return snapshot.options.some(option => String(input.matchText ? option.text : option.value).length > 0);
+      return snapshot.options.some(option => String(option.value).length > 0);
     if (input.predicate === "count-at-least")
       return snapshot.optionCount >= input.countAtLeast;
     if (input.predicate === "value") {
@@ -541,7 +545,7 @@ function buildWaitOptionCode(input) {
       type: input.predicate,
       value: input.value || "",
       countAtLeast: input.countAtLeast || null,
-      field: input.matchText ? "text" : "value",
+      field: input.predicate === "value" ? (input.matchText ? "text" : "value") : null,
       match: "exact"
     },
     snapshot
@@ -654,6 +658,8 @@ function buildWaitOptionPayload(tokens) {
   const predicateCount = [hasValue, hasNonEmpty, hasCountAtLeast].filter(Boolean).length;
   if (predicateCount !== 1)
     fail("wait-option requires exactly one of --value, --non-empty, or --count-at-least <n>.");
+  if (!hasValue && hasFlag(tokens, "--match-text"))
+    fail("wait-option --match-text is only valid with --value.");
   const input = {
     selector,
     predicate: hasValue ? "value" : (hasNonEmpty ? "non-empty" : "count-at-least"),
