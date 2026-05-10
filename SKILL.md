@@ -87,7 +87,7 @@ Use these wrapper commands:
 - `screenshot --session <name> [--name <label>] [--full-page] [target]`
 - `trace-start --session <name>`
 - `trace-stop --session <name>`
-- `probe network --session <name> [--name <label>] [--duration-ms 5000] [--until-quiet-ms <ms>] [--include <substring>] [--exclude <substring>] [--regex] [--reload|--goto <url>|--click <selector>|--select <selector> --value <value>] [--include-bodies] [--body-max-chars 2048]`
+- `probe network --session <name> [--name <label>] [--duration-ms 5000] [--until-quiet-ms <ms>] [--include <substring>] [--exclude <substring>] [--regex] [--reload|--goto <url>|--click <selector>|--select <selector> --value <value>] [--wait-until load|domcontentloaded|networkidle|commit] [--include-bodies] [--body-max-chars 2048]`
 - `probe wait-option --session <name> --selector <selector> (--value <value>|--non-empty|--count-at-least <n>) [--match-text] [--timeout-ms 5000] [--name <label>]`
 - `probe style --session <name> --selector <selector> --property <css-name> [--property <css-name> ...] [--name <label>] [--text-max-chars 120]`
 - `target-first <fill|click> ...` for selector-first, ref-fallback interactions

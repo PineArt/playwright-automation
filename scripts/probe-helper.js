@@ -694,6 +694,8 @@ function buildStylePayload(tokens) {
     properties,
     textMaxChars: parsePositiveInt(getOption(tokens, "--text-max-chars"), "--text-max-chars", 120)
   };
+  if (input.textMaxChars < 1)
+    fail("--text-max-chars must be at least 1.");
   return {
     session,
     operation: "style",
