@@ -192,6 +192,28 @@ Use one of:
 
 Only judge the product after the wait condition, a fresh `snapshot`, or a screenshot confirms the post-action state.
 
+## Long Runtime Probes Keep Turning Into Scripts
+
+If you are about to write a custom Node Playwright script only to count network requests, prove distinct URLs, wait for options, or read computed styles, use `probe` first.
+
+Useful forms:
+
+```text
+playwright-automation probe network --session local-a1-headless --duration-ms 6000 --until-quiet-ms 1500 --include "/api/"
+playwright-automation probe wait-option --session local-a1-headless --selector "select.product-category" --count-at-least 2
+playwright-automation probe style --session local-a1-headless --selector ".sync-badge" --property color --property background-color
+```
+
+Interpretation:
+
+- `probe network` records only events that start after the command begins. It does not retroactively capture already-finished requests.
+- `probe network` can also trigger one action after listeners attach. Use `--reload` for same-page bootstrap replays, `--goto` for route changes, or `--click` / `--select` to bind the network capture to a UI interaction.
+- duplicate network keys are `method + full URL`; query-string differences are intentionally distinct.
+- include/exclude patterns are substrings unless `--regex` is set.
+- response bodies are not stored unless `--include-bodies` is set; avoid body capture when secrets may appear.
+- `probe wait-option` does not require option elements to be visible. It checks native `<select>` options or `[role=option]` descendants.
+- a `wait-option` timeout is still useful evidence because the command writes the last observed option snapshot before exiting non-zero.
+
 ## Hash Route Does Not Re-run App Checks
 
 Setting `window.location.href` or `window.location.hash` to the same hash route may not trigger a route reload or auth/session re-check.

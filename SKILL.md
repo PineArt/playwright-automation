@@ -19,7 +19,7 @@ Treat `headed` and `headless` as peer modes. Do not open a browser without an ex
 - Prefer `doctor` before blaming the page or the wrapper.
 - For remote or authenticated apps, confirm the real URL, port, route, running process, and login state before treating browser evidence as product evidence.
 - When authenticated browser evidence is required and the current browser session is unauthenticated, ask the human to complete a headed manual login before recording a browser-auth gap. Record the gap only if headed login is unavailable, the human cannot complete it, or the post-login auth probe still fails.
-- Keep `eval` / `run-code` small and use the documented CLI shape; prefer selectors, waits, `target-first`, `reload`, and `goto` when they cover the need.
+- Keep `eval` / `run-code` small and use the documented CLI shape; prefer selectors, waits, `target-first`, `reload`, `goto`, and `probe` when they cover the need.
 - Use `recover` conservatively. Do not kill sessions unless you explicitly choose a destructive flag.
 - In hosts that support persisted approval rules, prefer a narrowly scoped persistent approval for repeated wrapper commands instead of re-requesting one-off approval every time.
 - Keep persisted approval scope tight. Approve the concrete wrapper or browser helper prefix you need, not a broad shell prefix that would allow unrelated commands.
@@ -87,6 +87,9 @@ Use these wrapper commands:
 - `screenshot --session <name> [--name <label>] [--full-page] [target]`
 - `trace-start --session <name>`
 - `trace-stop --session <name>`
+- `probe network --session <name> [--name <label>] [--duration-ms 5000] [--until-quiet-ms <ms>] [--include <substring>] [--exclude <substring>] [--regex] [--reload|--goto <url>|--click <selector>|--select <selector> --value <value>] [--include-bodies]`
+- `probe wait-option --session <name> --selector <selector> (--value <value>|--non-empty|--count-at-least <n>) [--match-text] [--timeout-ms 5000] [--name <label>]`
+- `probe style --session <name> --selector <selector> --property <css-name> [--property <css-name> ...] [--name <label>]`
 - `target-first <fill|click> ...` for selector-first, ref-fallback interactions
 - `state save --session <name> [--file <path>]`
 - `state load --session <name> --file <path>`
@@ -105,6 +108,7 @@ Use `open` only to create or intentionally recreate a browser page. It can reset
 Use `goto` to navigate an existing session without reopening it. Use `reload` when the current URL, hash route, or newly injected cookie should be re-read by the app.
 Use `--maximize` only with `--mode headed`; it injects a temporary config that starts Chromium-family browsers maximized.
 Use `target-first` when you want a lightweight ordered fallback such as stable selector first and latest snapshot ref last. Prefer scoped selectors such as `table button.some-row-action`, exact role/label selectors when available, and refs from the latest snapshot when text selectors are ambiguous.
+Use `probe` when you need reusable runtime evidence that would otherwise become a long fragile `run-code` string or an ad hoc Node Playwright script. `probe network` captures request/response events from the moment the command starts and writes JSON artifacts under `output/playwright/<session>/`; duplicate request keys are `method + full URL`, patterns are substrings unless `--regex` is set, and response bodies are omitted unless `--include-bodies` is explicitly set. It can optionally trigger one action after listeners attach: `--reload`, `--goto <url>`, `--click <selector>`, or `--select <selector> --value <value>`. `probe wait-option` waits for native `<select>` options or `[role=option]` descendants without relying on option visibility and writes the last observed option snapshot even on timeout. `probe style` records resolved `getComputedStyle` values for matching elements. Prefer these probes for network counts, distinct request URLs, option availability, and visual style evidence before falling back to raw `run-code`.
 Use `open` HTTP credential options for browser Basic Auth challenges. Prefer `--http-username-env` with `--http-password-env`, or `--http-credentials-file` with JSON `{"username":"...","password":"..."}`. Raw credential values are intentionally unsupported, and wrapper output redacts credentials.
 Use `state` for manual-first login reuse. Open a headed session, let the human enter credentials directly in the browser, confirm the app is authenticated, then `state save`. Later, open or reuse a named session, `state load`, `reload` or `goto`, `snapshot`, and verify an app-specific authenticated state. State files contain cookies and tokens; keep them under ignored workspace output by default and delete or rotate them after use.
 Use `cookie` for login-state injection during local UI verification. Always provide `--session` and `--url`; the wrapper does not infer origin or domain. Prefer `--value-env` or `--value-file` for secrets. Cookie values are redacted by default and are only shown by `cookie list` when `--show-values` is explicitly provided. `cookie set` success only proves the browser context accepted the cookie; verify with `cookie list`, `reload` or `goto`, `snapshot`, and an app-level authenticated state check such as `/api/auth/session` or visible page state.
@@ -130,6 +134,7 @@ Use `cookie` for login-state injection during local UI verification. Always prov
 - Do not use `recover` without `--session`.
 - Do not treat `doctor` as an installer; read its result first.
 - Do not rely on `eval` or `run-code` as the default path when refs or standard CLI commands are enough. Diagnostic reads such as `document.title`, error-overlay checks, or app-session endpoint checks are acceptable.
+- Do not hand-roll a Node Playwright probe for network counts, option waits, or computed styles until the matching `probe` command has been tried or ruled out.
 - Do not default to snapshot refs when you already have a stable unique selector; keep refs as the fallback.
 - Do not put Basic Auth passwords on the command line. Use the `open` HTTP credential env/file options so credentials are not echoed in output.
 - Do not use `run eval` with `document.cookie` for login-state injection. Use the `cookie` command so HttpOnly cookies work and values are not echoed in command output.

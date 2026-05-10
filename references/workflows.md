@@ -192,6 +192,34 @@ When a flow is visually wrong:
 
 For text selectors, scope first. Prefer selectors like `table button.windchill-link-button >> text=Shanghai项目`, exact role/label locators when available, or a ref from the latest snapshot. If `target-first` reports `automation-failure=selector-not-unique`, fix the automation selector before judging the product.
 
+## Runtime Probes
+
+Use `probe` when the evidence you need is a network timeline, option availability, or computed style snapshot. These commands reuse the existing named session and write JSON artifacts under `output/playwright/<session>/`.
+
+Capture a short network window, optionally triggering one action after listeners attach:
+
+```text
+playwright-automation probe network --session local-a1-headless --name warranty-trend --duration-ms 6000 --until-quiet-ms 1500 --include "/api/warranty/repair-rate/trend" --reload
+```
+
+`probe network` starts at command invocation, not at page load. Duplicate request keys are `method + full URL`. `--include` and `--exclude` use substring matching unless `--regex` is set. Response bodies are omitted by default; use `--include-bodies` only when the body is required and safe to store in the artifact. Supported triggers are `--reload`, `--goto <url>`, `--click <selector>`, and `--select <selector> --value <value>`.
+
+Wait for native `<select>` options or `[role=option]` descendants:
+
+```text
+playwright-automation probe wait-option --session local-a1-headless --selector '[data-testid="warranty-repair-rate-trend-left"] select' --non-empty --timeout-ms 5000
+```
+
+Use exactly one predicate: `--value <value>`, `--non-empty`, or `--count-at-least <n>`. `--value` matches option `value` exactly by default; add `--match-text` to match visible option text. On timeout the command exits non-zero but still writes the last observed option snapshot.
+
+Read computed styles:
+
+```text
+playwright-automation probe style --session local-a1-headless --selector ".sync-badge" --property background-color --property color --name sync-badge-style
+```
+
+`probe style` returns resolved `getComputedStyle` values for each matching element. Shorthand properties may resolve differently by browser; prefer explicit properties such as `background-color`, `border-color`, `font-size`, or `display`.
+
 ## Result Classification
 
 Treat these as automation failures:
@@ -214,6 +242,7 @@ Treat a product verification failure as valid only after the automation has:
 
 Use `snapshot` first and prefer standard commands.
 Use `run eval ...` or `run run-code ...` only when the CLI does not already expose the needed behavior.
+For network counts, distinct request URLs, option readiness, and computed styles, use `probe` before writing inline JavaScript.
 
 Keep inline JavaScript small. Long one-shot strings are brittle in PowerShell and harder to diagnose than a selector command, a wait template, or a short probe.
 

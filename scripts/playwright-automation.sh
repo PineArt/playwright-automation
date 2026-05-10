@@ -23,6 +23,7 @@ write_help() {
 [pw-auto]   trace-stop   stop Playwright tracing for a session
 [pw-auto]   cookie       set, list, or clear cookies without echoing values
 [pw-auto]   state        save or load browser authentication state
+[pw-auto]   probe        capture JSON network, option, and style evidence
 [pw-auto]   target-first selector-first, ref-fallback fill/click helper
 [pw-auto]   sessions     list active Playwright CLI sessions
 [pw-auto]   recover      attempt non-destructive recovery for one session
@@ -151,6 +152,22 @@ EOF
 [pw-auto] notes:
 [pw-auto]   order targets as scoped stable selectors first and latest snapshot refs last
 [pw-auto]   if a selector is ambiguous, add a container scope, exact role/label, or latest snapshot ref
+EOF
+      ;;
+    "probe")
+      cat <<'EOF'
+[pw-auto] usage: playwright-automation [--workspace <path>] probe <network|wait-option|style> --session <name> [options]
+[pw-auto] description: capture JSON runtime evidence in output/playwright/<session>/
+[pw-auto] commands:
+[pw-auto]   probe network --session <name> [--name <label>] [--duration-ms 5000] [--until-quiet-ms <ms>] [--include <substring>] [--exclude <substring>] [--regex] [--reload|--goto <url>|--click <selector>|--select <selector> --value <value>] [--include-bodies]
+[pw-auto]   probe wait-option --session <name> --selector <selector> (--value <value>|--non-empty|--count-at-least <n>) [--match-text] [--timeout-ms 5000] [--name <label>]
+[pw-auto]   probe style --session <name> --selector <selector> --property <css-name> [--property <css-name> ...] [--name <label>]
+[pw-auto] notes:
+[pw-auto]   network capture starts at command invocation; duplicate keys are method + full URL
+[pw-auto]   network can optionally trigger one action after listeners attach: reload, goto, click, or select
+[pw-auto]   network patterns are substrings unless --regex is set; response bodies are omitted unless --include-bodies is set
+[pw-auto]   wait-option checks native select option elements or [role=option] descendants and writes a timeout artifact before exiting non-zero
+[pw-auto]   style reads resolved getComputedStyle values and writes count/elements JSON
 EOF
       ;;
     "state")
@@ -742,6 +759,14 @@ target_first_cmd() {
   exit $?
 }
 
+probe_cmd() {
+  [[ $# -ge 1 ]] || fail "probe requires network, wait-option, or style."
+  build_common_env
+  command -v node >/dev/null 2>&1 || fail "node was not found on PATH."
+  node "${script_dir}/probe-helper.js" --output-root "${output_root}" --workspace-root "${workspace_root}" --daemon-root "${daemon_root}" "$@"
+  exit $?
+}
+
 sessions_cmd() {
   build_common_env
   run_cli list
@@ -855,6 +880,7 @@ case "${command_name}" in
   trace-stop) trace_stop_cmd "$@" ;;
   cookie) cookie_cmd "$@" ;;
   state) state_cmd "$@" ;;
+  probe) probe_cmd "$@" ;;
   target-first) target_first_cmd "$@" ;;
   sessions) sessions_cmd ;;
   recover) recover_cmd "$@" ;;
