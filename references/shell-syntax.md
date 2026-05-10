@@ -29,9 +29,9 @@ Recommended direct usage:
 & .\scripts\playwright-automation.ps1 cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
 & .\scripts\playwright-automation.ps1 cookie list --session gallery-a1-headed --url http://127.0.0.1:5173 --redact
 & .\scripts\playwright-automation.ps1 cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
-& .\scripts\playwright-automation.ps1 probe network --session gallery-a1-headed --duration-ms 5000 --until-quiet-ms 1000 --include "/api/" --reload
+& .\scripts\playwright-automation.ps1 probe network --session gallery-a1-headed --duration-ms 5000 --until-quiet-ms 1000 --include "/api/" --reload --include-bodies --body-max-chars 2048
 & .\scripts\playwright-automation.ps1 probe wait-option --session gallery-a1-headed --selector "select.product-category" --count-at-least 2
-& .\scripts\playwright-automation.ps1 probe style --session gallery-a1-headed --selector ".sync-badge" --property color --property background-color
+& .\scripts\playwright-automation.ps1 probe style --session gallery-a1-headed --selector ".sync-badge" --property color --property background-color --text-max-chars 120
 & .\scripts\playwright-automation.ps1 run click e3 --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 cli click e3 --session gallery-a1-headed
 & .\scripts\playwright-automation.ps1 target-first fill --session gallery-a1-headed --text "alice" --target "#username" --target e12
@@ -70,9 +70,9 @@ export TEST_COOKIE
 bash ./scripts/playwright-automation.sh cookie set --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --value-env TEST_COOKIE --path / --http-only
 bash ./scripts/playwright-automation.sh cookie list --session gallery-a1-headed --url http://127.0.0.1:5173 --redact
 bash ./scripts/playwright-automation.sh cookie clear --session gallery-a1-headed --url http://127.0.0.1:5173 --name comreview_session --path /
-bash ./scripts/playwright-automation.sh probe network --session gallery-a1-headed --duration-ms 5000 --until-quiet-ms 1000 --include "/api/" --reload
+bash ./scripts/playwright-automation.sh probe network --session gallery-a1-headed --duration-ms 5000 --until-quiet-ms 1000 --include "/api/" --reload --include-bodies --body-max-chars 2048
 bash ./scripts/playwright-automation.sh probe wait-option --session gallery-a1-headed --selector "select.product-category" --count-at-least 2
-bash ./scripts/playwright-automation.sh probe style --session gallery-a1-headed --selector ".sync-badge" --property color --property background-color
+bash ./scripts/playwright-automation.sh probe style --session gallery-a1-headed --selector ".sync-badge" --property color --property background-color --text-max-chars 120
 bash ./scripts/playwright-automation.sh run click e3 --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh cli click e3 --session gallery-a1-headed
 bash ./scripts/playwright-automation.sh target-first fill --session gallery-a1-headed --text "alice" --target "#username" --target e12

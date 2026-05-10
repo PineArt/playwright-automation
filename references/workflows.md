@@ -202,7 +202,7 @@ Capture a short network window, optionally triggering one action after listeners
 playwright-automation probe network --session local-a1-headless --name warranty-trend --duration-ms 6000 --until-quiet-ms 1500 --include "/api/warranty/repair-rate/trend" --reload
 ```
 
-`probe network` starts at command invocation, not at page load. Duplicate request keys are `method + full URL`. `--include` and `--exclude` use substring matching unless `--regex` is set. Response bodies are omitted by default; use `--include-bodies` only when the body is required and safe to store in the artifact. When bodies are included, each response records `bodyStatus`; `pending` means the body read did not finish inside the probe's body-read grace window. Supported triggers are `--reload`, `--goto <url>`, `--click <selector>`, and `--select <selector> --value <value>`.
+`probe network` starts at command invocation, not at page load. Duplicate request keys are `method + full URL`. `--include` and `--exclude` use substring matching unless `--regex` is set. Response bodies are omitted by default; use `--include-bodies` only when the body is required and safe to store in the artifact. When bodies are included, each response records `bodyStatus`; `pending` means the body read did not finish inside the probe's body-read grace window. Use `--body-max-chars <n>` to change the stored response-body preview length. Supported triggers are `--reload`, `--goto <url>`, `--click <selector>`, and `--select <selector> --value <value>`.
 
 Wait for native `<select>` options or `[role=option]` descendants:
 
@@ -218,7 +218,7 @@ Read computed styles:
 playwright-automation probe style --session local-a1-headless --selector ".sync-badge" --property background-color --property color --name sync-badge-style
 ```
 
-`probe style` returns resolved `getComputedStyle` values for each matching element. Shorthand properties may resolve differently by browser; prefer explicit properties such as `background-color`, `border-color`, `font-size`, or `display`.
+`probe style` returns resolved `getComputedStyle` values for each matching element. Shorthand properties may resolve differently by browser; prefer explicit properties such as `background-color`, `border-color`, `font-size`, or `display`. Use `--text-max-chars <n>` to change the text sample length stored with each matched element.
 
 ## Result Classification
 

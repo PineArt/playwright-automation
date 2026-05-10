@@ -46,6 +46,10 @@ function hasFlag(tokens, name) {
   return tokens.includes(name);
 }
 
+function hasOption(tokens, name) {
+  return tokens.some(token => token === name || token.startsWith(`${name}=`));
+}
+
 function requireOption(tokens, name) {
   const value = getOption(tokens, name);
   if (!value)
@@ -641,7 +645,7 @@ function buildNetworkTrigger(tokens) {
     return { type: "click", selector: clickSelector };
   if (selectSelector) {
     const value = getOption(tokens, "--value");
-    if (!value)
+    if (!hasOption(tokens, "--value"))
       fail("network --select requires --value <value>.");
     return { type: "select", selector: selectSelector, value };
   }
@@ -651,7 +655,7 @@ function buildNetworkTrigger(tokens) {
 function buildWaitOptionPayload(tokens) {
   const session = requireOption(tokens, "--session");
   const selector = requireOption(tokens, "--selector");
-  const hasValue = !!getOption(tokens, "--value");
+  const hasValue = hasOption(tokens, "--value");
   const hasNonEmpty = hasFlag(tokens, "--non-empty");
   const countAtLeastValue = getOption(tokens, "--count-at-least");
   const hasCountAtLeast = !!countAtLeastValue;
