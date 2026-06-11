@@ -294,40 +294,83 @@ function buildClearCode({ url, name, domain, path: cookiePath }) {
 }`;
 }
 
-function createWorkspaceHash(workspaceRoot) {
-  return crypto.createHash("sha1").update(workspaceRoot).digest("hex").substring(0, 16);
+function createHashKey(value) {
+  return crypto.createHash("sha1").update(value).digest("hex").substring(0, 16);
 }
 
-function sessionFilePath(daemonRoot, session) {
-  return path.join(daemonRoot, `${session}.session`);
+function findWorkspaceDir(startDir) {
+  let dir = path.resolve(startDir);
+  for (let i = 0; i < 10; i += 1) {
+    if (fs.existsSync(path.join(dir, ".playwright")))
+      return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir)
+      break;
+    dir = parent;
+  }
+  return "";
+}
+
+function packageRootCandidates() {
+  const npmCache = process.env.npm_config_cache || process.env.NPM_CONFIG_CACHE || "";
+  if (!npmCache)
+    return [];
+  const npxRoot = path.join(npmCache, "_npx");
+  let entries = [];
+  try {
+    entries = fs.readdirSync(npxRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory())
+      continue;
+    const packageRoot = path.join(npxRoot, entry.name, "node_modules", "playwright-core");
+    const packageJson = path.join(packageRoot, "package.json");
+    try {
+      const stat = fs.statSync(packageJson);
+      candidates.push({ packageRoot, mtimeMs: stat.mtimeMs });
+    } catch {
+      // Ignore incomplete or unrelated npx cache entries.
+    }
+  }
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates.map(candidate => candidate.packageRoot);
+}
+
+function candidateHashKeys(workspaceRoot) {
+  const keys = [];
+  const workspaceDir = findWorkspaceDir(workspaceRoot);
+  if (workspaceDir)
+    keys.push(createHashKey(workspaceDir));
+  for (const packageRoot of packageRootCandidates())
+    keys.push(createHashKey(packageRoot));
+  keys.push(createHashKey(workspaceRoot));
+  return Array.from(new Set(keys));
+}
+
+function sessionFileCandidates(daemonRoot, workspaceRoot, session) {
+  const candidates = [];
+  for (const key of candidateHashKeys(workspaceRoot))
+    candidates.push(path.join(daemonRoot, key, `${session}.session`));
+
+  const direct = path.join(daemonRoot, `${session}.session`);
+  candidates.push(direct);
+
+  return Array.from(new Set(candidates));
 }
 
 function findSessionConfig(daemonRoot, session, workspaceRoot) {
-  const candidates = [];
-  const configuredPath = sessionFilePath(daemonRoot, session);
-  if (fs.existsSync(configuredPath))
-    candidates.push(configuredPath);
-
-  const workspaceHash = createWorkspaceHash(workspaceRoot);
-  const fallbackPath = path.join(daemonRoot, workspaceHash, `${session}.session`);
-  if (fs.existsSync(fallbackPath))
-    candidates.push(fallbackPath);
-
-  for (const file of findSessionFiles(daemonRoot, session)) {
-    if (!candidates.includes(file))
-      candidates.push(file);
-  }
-
+  const candidates = sessionFileCandidates(daemonRoot, workspaceRoot, session).filter(file => fs.existsSync(file));
   if (!candidates.length)
     return null;
-
-  candidates.sort((a, b) => {
-    const aTime = fs.statSync(a).mtimeMs;
-    const bTime = fs.statSync(b).mtimeMs;
-    return bTime - aTime;
-  });
-  const file = candidates[0];
-  return { file, config: readSessionConfig(file) };
+  const entries = candidates.map(file => ({ file, config: readSessionConfig(file) }));
+  if (entries.length > 1) {
+    const paths = entries.map(entry => entry.file).join(", ");
+    fail(`session '${session}' has ambiguous metadata candidates: ${paths}`);
+  }
+  return entries[0];
 }
 
 function readSessionConfig(file) {
@@ -336,30 +379,6 @@ function readSessionConfig(file) {
   } catch {
     fail(`session metadata '${file}' is not readable.`);
   }
-}
-
-function findSessionFiles(root, session) {
-  const matches = [];
-  const target = `${session}.session`;
-  const stack = [root];
-  while (stack.length) {
-    const dir = stack.pop();
-    let entries = [];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-      } else if (entry.isFile() && entry.name === target) {
-        matches.push(fullPath);
-      }
-    }
-  }
-  return matches;
 }
 
 function sendSocketMessage(socketPath, method, params) {

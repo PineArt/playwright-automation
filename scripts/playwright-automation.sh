@@ -312,7 +312,12 @@ session_metadata_exists() {
   local session="$2"
   [[ -n "${root}" ]] || return 1
   [[ -f "${root}/${session}.session" ]] && return 0
-  find "${root}" -name "${session}.session" -type f -print -quit 2>/dev/null | grep -q .
+  local dir
+  for dir in "${root}"/*; do
+    [[ -d "${dir}" ]] || continue
+    [[ -f "${dir}/${session}.session" ]] && return 0
+  done
+  return 1
 }
 
 require_session() {
@@ -449,6 +454,7 @@ build_common_env() {
   mkdir -p "${output_root}" "${daemon_root}" "${npm_cache}"
 
   export PLAYWRIGHT_DAEMON_SESSION_DIR="${daemon_root}"
+  export PWTEST_DAEMON_SESSION_DIR="${daemon_root}"
   export npm_config_cache="${npm_cache}"
 }
 
@@ -698,7 +704,18 @@ trace_stop_cmd() {
 cookie_cmd() {
   build_common_env
   command -v node >/dev/null 2>&1 || fail "node was not found on PATH."
-  node "${script_dir}/cookie-helper.js" --output-root "${output_root}" --workspace-root "${workspace_root}" --daemon-root "${daemon_root}" "$@"
+  local cookie_args=()
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--path" && $# -ge 2 ]]; then
+      cookie_args+=("--path=$2")
+      shift 2
+    else
+      cookie_args+=("$1")
+      shift
+    fi
+  done
+  MSYS2_ARG_CONV_EXCL="${MSYS2_ARG_CONV_EXCL:+${MSYS2_ARG_CONV_EXCL};}--path=" \
+    node "${script_dir}/cookie-helper.js" --output-root "${output_root}" --workspace-root "${workspace_root}" --daemon-root "${daemon_root}" "${cookie_args[@]}"
   exit $?
 }
 

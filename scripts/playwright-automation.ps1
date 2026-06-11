@@ -419,6 +419,7 @@ function Build-CommonEnv {
     New-Item -ItemType Directory -Force -Path $npmCache | Out-Null
 
     $env:PLAYWRIGHT_DAEMON_SESSION_DIR = $daemonRoot
+    $env:PWTEST_DAEMON_SESSION_DIR = $daemonRoot
     $env:npm_config_cache = $npmCache
 
     return @{
@@ -441,7 +442,10 @@ function Test-SessionMetadataExists {
     if (Test-Path -LiteralPath $direct) {
         return $true
     }
-    $matches = Get-ChildItem -LiteralPath $Paths.DaemonRoot -Recurse -Filter "$Session.session" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    $matches = Get-ChildItem -LiteralPath $Paths.DaemonRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName "$Session.session" } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
     return $null -ne $matches
 }
 
