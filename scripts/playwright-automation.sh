@@ -322,7 +322,8 @@ session_metadata_exists() {
 
 require_session() {
   local session
-  session="$(get_option_value --session "$@")" || fail "missing required --session <name>."
+  session="$(get_option_value --session "$@")" || return 1
+  [[ -n "${session}" && "${session}" != --* ]] || return 1
   printf '%s\n' "${session}"
 }
 
@@ -561,7 +562,7 @@ open_cmd() {
   shift
 
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local mode
   mode="$(get_option_value --mode "$@")" || fail "open requires --mode headed or --mode headless."
   [[ "${mode}" == "headed" || "${mode}" == "headless" ]] || fail "invalid mode '${mode}'. Use headed or headless."
@@ -630,7 +631,7 @@ open_cmd() {
 snapshot_cmd() {
   build_common_env
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local cli=(--session "${session}" snapshot)
   forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
@@ -642,7 +643,7 @@ goto_cmd() {
   shift
   build_common_env
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local cli=(--session "${session}" goto "${url}")
   forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
@@ -651,7 +652,7 @@ goto_cmd() {
 reload_cmd() {
   build_common_env
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local cli=(--session "${session}" reload)
   forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
@@ -661,7 +662,7 @@ screenshot_cmd() {
   build_common_env
   ensure_npx
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local name
   name="$(get_option_value --name "$@" || true)"
   if [[ -z "${name}" ]]; then
@@ -686,7 +687,7 @@ screenshot_cmd() {
 trace_start_cmd() {
   build_common_env
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local cli=(--session "${session}" tracing-start)
   forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
@@ -695,7 +696,7 @@ trace_start_cmd() {
 trace_stop_cmd() {
   build_common_env
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local cli=(--session "${session}" tracing-stop)
   forward_tokens cli --values --session -- "$@"
   run_cli "${cli[@]}"
@@ -726,7 +727,7 @@ state_cmd() {
   build_common_env
   ensure_npx
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
   local file_value=""
   file_value="$(get_option_value --file "$@" || true)"
 
@@ -794,7 +795,7 @@ recover_cmd() {
   build_common_env
   ensure_npx
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
 
   "${npx_cmd}" "${cli_prefix[@]}" attach "${session}" --session "${session}"
   local attach_code=$?
@@ -819,7 +820,7 @@ cleanup_cmd() {
   build_common_env
   ensure_npx
   local session
-  session="$(require_session "$@")"
+  session="$(require_session "$@")" || fail "missing required --session <name>."
 
   "${npx_cmd}" "${cli_prefix[@]}" --session "${session}" close
   local close_code=$?

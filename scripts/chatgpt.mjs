@@ -1,22 +1,23 @@
 import { spawnSync } from 'node:child_process';
 import { closeSync, mkdtempSync, openSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const ORIGIN = 'https://chatgpt.com';
 const ANCHORS = {
   composer: '[contenteditable="true"][role="textbox"]:visible',
-  composerForm: 'form[data-chatgpt-composer]',
-  send: 'button[type="submit"]:visible',
+  composerName: '^(询问 ChatGPT|与 ChatGPT 聊天|Ask ChatGPT|Chat with ChatGPT|使用 ChatGPT Work|Use ChatGPT Work)$',
+  workComposer: '^(使用 ChatGPT Work|Use ChatGPT Work)$',
+  send: '^(发送|发送消息|Send|Send message)$',
   login: '^(登录|Log in)$',
   turnKey: 'data-content-search-turn-key',
   assistant: '[data-conversation-role="assistant"]',
   turnState: 'data-talvt-turn-state',
   response: '[data-response-body]',
   composerMode: '^(撰写器模式|Composer mode)$',
+  newChat: '^(新聊天|New chat)$',
   workMode: '^(工作|Work)$',
-  workComposer: '^(使用 ChatGPT Work|Use ChatGPT Work)$',
   modelPicker: '^(选择 ChatGPT 模型|Choose ChatGPT model)$',
   effort: '^(强度|Effort)$',
 };
@@ -32,19 +33,29 @@ const USAGE = `node chatgpt.mjs <open|probe|ask|work> [--workspace PATH] [--sess
 
 async function operate(page, { origin, anchors, command, prompt }) {
   if (new URL(page.url()).origin !== origin) throw new Error(`Open ${origin} in the selected Chrome tab.`);
-  const form = page.locator(anchors.composerForm).filter({ has: page.locator(anchors.composer) });
-  const composer = form.locator(anchors.composer);
+  const findComposer = (name = anchors.composerName) => (
+    page.getByRole('textbox', { name: new RegExp(name, 'i') }).and(page.locator(anchors.composer))
+  );
+  const composer = findComposer();
   const loggedOut = await page.getByRole('button', { name: new RegExp(anchors.login, 'i') }).first().isVisible();
 
   if (command === 'work') {
     if (loggedOut) throw new Error('Sign in manually in the headed Chrome window, then run work again.');
     if (await composer.count() === 1 && (await composer.innerText()).trim()) throw new Error('The ChatGPT composer already contains a draft.');
     const mode = page.getByRole('group', { name: new RegExp(anchors.composerMode, 'i') });
-    if (!await mode.isVisible()) await page.goto(origin, { waitUntil: 'domcontentloaded' });
+    if (!await mode.isVisible() && new URL(page.url()).pathname !== '/') {
+      const newChat = page.getByRole('button', { name: new RegExp(anchors.newChat, 'i') })
+        .and(page.locator('button:visible'));
+      if (await newChat.count() === 1) {
+        await newChat.click({ timeout: 10_000 });
+      } else {
+        await page.goto(origin, { waitUntil: 'domcontentloaded' });
+      }
+    }
     const work = mode.getByRole('button', { name: new RegExp(anchors.workMode, 'i') });
-    await work.waitFor({ state: 'visible', timeout: 15_000 });
+    await work.waitFor({ state: 'visible', timeout: 30_000 });
     if (await work.getAttribute('aria-pressed') !== 'true') await work.click();
-    const workComposer = page.getByRole('textbox', { name: new RegExp(anchors.workComposer, 'i') });
+    const workComposer = findComposer(anchors.workComposer);
     await workComposer.waitFor({ state: 'visible', timeout: 10_000 });
     const workForm = workComposer.locator('xpath=ancestor::form[1]');
     const pickerName = new RegExp(anchors.modelPicker, 'i');
@@ -81,7 +92,8 @@ async function operate(page, { origin, anchors, command, prompt }) {
   const draft = (await composer.innerText()).trim();
   if (draft && draft !== prompt.trim()) throw new Error('The ChatGPT composer already contains a different draft.');
   if (!draft) await composer.fill(prompt);
-  await form.locator(anchors.send).click({ timeout: 10_000 });
+  const form = composer.locator('xpath=ancestor::form[1]');
+  await form.getByRole('button', { name: new RegExp(anchors.send, 'i') }).click({ timeout: 10_000 });
   const freshReply = page.locator(`[${anchors.turnKey}]${previousKeys.map(key => `:not([${anchors.turnKey}=${JSON.stringify(key)}])`).join('')}:has(${anchors.assistant})`).last().locator(completedBody).last();
   try {
     await freshReply.waitFor({ state: 'visible', timeout: 90_000 });
@@ -92,7 +104,9 @@ async function operate(page, { origin, anchors, command, prompt }) {
 }
 
 function runWrapper(workspace, args, outputFile) {
-  const wrapper = process.env.CHATGPT_PLAYWRIGHT_WRAPPER ?? join(homedir(), '.agents', 'skills', 'playwright-automation', 'scripts', 'playwright-automation.ps1');
+  const wrapper = process.env.CHATGPT_PLAYWRIGHT_WRAPPER ?? fileURLToPath(
+    new URL('./playwright-automation.ps1', import.meta.url),
+  );
   const fd = outputFile ? openSync(outputFile, 'w') : undefined;
   let result;
   try {
@@ -117,7 +131,7 @@ function main() {
   const sessions = runWrapper(workspace, ['sessions']);
   const sessionOpen = sessions.split(/\r?\n/).some((line, index, lines) => line === `- ${session}:` && lines[index + 1]?.trim() === '- status: open');
   if (command === 'open') {
-    if (sessionOpen) return console.log(`Chrome session ${session} is already open.`);
+    if (sessionOpen) return console.log(`Chrome session ${session} is already open in workspace ${workspace}.`);
     const openDir = mkdtempSync(join(workspace, 'output', 'playwright', `${session}-open-`));
     const outputFile = join(openDir, 'open.log');
     try {
@@ -127,7 +141,9 @@ function main() {
       rmdirSync(openDir);
     }
   }
-  if (!sessionOpen) throw new Error(`Open Chrome first with: node chatgpt.mjs open --session ${session}`);
+  if (!sessionOpen) {
+    throw new Error(`Chrome session ${session} is not open in workspace ${workspace}. Run open with the same --workspace and --session.`);
+  }
   const artifactDir = mkdtempSync(join(workspace, 'output', 'playwright', `${session}-call-`));
   try {
     const filename = join(artifactDir, 'operation.js');
@@ -135,7 +151,7 @@ function main() {
     const output = runWrapper(workspace, ['run', 'run-code', '--filename', filename, ...sessionArgs]);
     const result = output.match(/^### Result\r?\n([\s\S]*?)(?=\r?\n### |$)/m);
     if (!result) throw new Error('Playwright returned no ChatGPT result.');
-    console.log(JSON.stringify(JSON.parse(result[1]), null, 2));
+    console.log(JSON.stringify({ workspace, ...JSON.parse(result[1]) }, null, 2));
   } finally {
     rmSync(join(artifactDir, 'operation.js'), { force: true });
     rmdirSync(artifactDir);

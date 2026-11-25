@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 "use strict";
 
-const crypto = require("crypto");
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
+const { resolveSessionSocket } = require("./session-resolver");
 
 function fail(message, code = 1) {
   console.error(`[pw-auto] ${message}`);
@@ -294,93 +294,6 @@ function buildClearCode({ url, name, domain, path: cookiePath }) {
 }`;
 }
 
-function createHashKey(value) {
-  return crypto.createHash("sha1").update(value).digest("hex").substring(0, 16);
-}
-
-function findWorkspaceDir(startDir) {
-  let dir = path.resolve(startDir);
-  for (let i = 0; i < 10; i += 1) {
-    if (fs.existsSync(path.join(dir, ".playwright")))
-      return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir)
-      break;
-    dir = parent;
-  }
-  return "";
-}
-
-function packageRootCandidates() {
-  const npmCache = process.env.npm_config_cache || process.env.NPM_CONFIG_CACHE || "";
-  if (!npmCache)
-    return [];
-  const npxRoot = path.join(npmCache, "_npx");
-  let entries = [];
-  try {
-    entries = fs.readdirSync(npxRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const candidates = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory())
-      continue;
-    const packageRoot = path.join(npxRoot, entry.name, "node_modules", "playwright-core");
-    const packageJson = path.join(packageRoot, "package.json");
-    try {
-      const stat = fs.statSync(packageJson);
-      candidates.push({ packageRoot, mtimeMs: stat.mtimeMs });
-    } catch {
-      // Ignore incomplete or unrelated npx cache entries.
-    }
-  }
-  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return candidates.map(candidate => candidate.packageRoot);
-}
-
-function candidateHashKeys(workspaceRoot) {
-  const keys = [];
-  const workspaceDir = findWorkspaceDir(workspaceRoot);
-  if (workspaceDir)
-    keys.push(createHashKey(workspaceDir));
-  for (const packageRoot of packageRootCandidates())
-    keys.push(createHashKey(packageRoot));
-  keys.push(createHashKey(workspaceRoot));
-  return Array.from(new Set(keys));
-}
-
-function sessionFileCandidates(daemonRoot, workspaceRoot, session) {
-  const candidates = [];
-  for (const key of candidateHashKeys(workspaceRoot))
-    candidates.push(path.join(daemonRoot, key, `${session}.session`));
-
-  const direct = path.join(daemonRoot, `${session}.session`);
-  candidates.push(direct);
-
-  return Array.from(new Set(candidates));
-}
-
-function findSessionConfig(daemonRoot, session, workspaceRoot) {
-  const candidates = sessionFileCandidates(daemonRoot, workspaceRoot, session).filter(file => fs.existsSync(file));
-  if (!candidates.length)
-    return null;
-  const entries = candidates.map(file => ({ file, config: readSessionConfig(file) }));
-  if (entries.length > 1) {
-    const paths = entries.map(entry => entry.file).join(", ");
-    fail(`session '${session}' has ambiguous metadata candidates: ${paths}`);
-  }
-  return entries[0];
-}
-
-function readSessionConfig(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    fail(`session metadata '${file}' is not readable.`);
-  }
-}
-
 function sendSocketMessage(socketPath, method, params) {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath);
@@ -437,14 +350,7 @@ function sendSocketMessage(socketPath, method, params) {
 }
 
 async function runTool({ workspaceRoot, daemonRoot, payload }) {
-  const sessionInfo = findSessionConfig(daemonRoot, payload.session, workspaceRoot);
-  if (!sessionInfo)
-    fail(`session '${payload.session}' is not open. Run open first.`);
-
-  const config = sessionInfo.config || {};
-  const socketPath = config.socketPath;
-  if (!socketPath)
-    fail(`session '${payload.session}' metadata does not include a socket path.`);
+  const socketPath = resolveSessionSocket(daemonRoot, payload.session, workspaceRoot);
 
   const params = {
     args: payload.cliArgs,

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 "use strict";
 
-const crypto = require("crypto");
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
+const { resolveSessionSocket } = require("./session-resolver");
 
 function fail(message, code = 1) {
   console.error(`[pw-auto] ${message}`);
@@ -149,70 +149,6 @@ function artifactPath(outputRoot, session, operation, name) {
   return path.join(sessionDir, `${label}-${timestamp()}.json`);
 }
 
-function createWorkspaceHash(workspaceRoot) {
-  return crypto.createHash("sha1").update(workspaceRoot).digest("hex").substring(0, 16);
-}
-
-function sessionFilePath(daemonRoot, session) {
-  return path.join(daemonRoot, `${session}.session`);
-}
-
-function findSessionFiles(root, session) {
-  const matches = [];
-  const target = `${session}.session`;
-  const stack = [root];
-  while (stack.length) {
-    const dir = stack.pop();
-    let entries = [];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-      } else if (entry.isFile() && entry.name === target) {
-        matches.push(fullPath);
-      }
-    }
-  }
-  return matches;
-}
-
-function readSessionConfig(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    fail(`session metadata '${file}' is not readable.`);
-  }
-}
-
-function findSessionConfig(daemonRoot, session, workspaceRoot) {
-  const candidates = [];
-  const configuredPath = sessionFilePath(daemonRoot, session);
-  if (fs.existsSync(configuredPath))
-    candidates.push(configuredPath);
-
-  const workspaceHash = createWorkspaceHash(workspaceRoot);
-  const fallbackPath = path.join(daemonRoot, workspaceHash, `${session}.session`);
-  if (fs.existsSync(fallbackPath))
-    candidates.push(fallbackPath);
-
-  for (const file of findSessionFiles(daemonRoot, session)) {
-    if (!candidates.includes(file))
-      candidates.push(file);
-  }
-
-  if (!candidates.length)
-    return null;
-
-  candidates.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  const file = candidates[0];
-  return { file, config: readSessionConfig(file) };
-}
-
 function sendSocketMessage(socketPath, method, params, timeoutMs) {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath);
@@ -265,13 +201,7 @@ function sendSocketMessage(socketPath, method, params, timeoutMs) {
 }
 
 async function runTool({ workspaceRoot, daemonRoot, payload }) {
-  const sessionInfo = findSessionConfig(daemonRoot, payload.session, workspaceRoot);
-  if (!sessionInfo)
-    fail(`session '${payload.session}' is not open. Run open first.`);
-
-  const socketPath = sessionInfo.config && sessionInfo.config.socketPath;
-  if (!socketPath)
-    fail(`session '${payload.session}' metadata does not include a socket path.`);
+  const socketPath = resolveSessionSocket(daemonRoot, payload.session, workspaceRoot);
 
   const params = {
     args: { _: ["run-code", payload.code] },

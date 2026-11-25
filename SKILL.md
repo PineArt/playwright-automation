@@ -43,6 +43,8 @@ If the skill is installed somewhere else, use that installed path instead.
 The wrappers use the current working directory as the workspace by default.
 Override the workspace explicitly with `--workspace <path>` or `PW_AUTO_WORKSPACE`.
 
+For ChatGPT on Windows, use [the ChatGPT helper](scripts/chatgpt.mjs) with Node.js. See [ChatGPT Chrome workflow](references/chatgpt.md) for manual sign-in, Work with High reasoning, and cross-project session reuse.
+
 Logical command pattern:
 
 ```text
